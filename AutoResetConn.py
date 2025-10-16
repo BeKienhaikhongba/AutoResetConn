@@ -18,7 +18,9 @@ import requests
 import psycopg2
 from cryptography.fernet import Fernet
 
+
 # ===================== APP PATH & FILES =====================
+"""
 APP_DIR = (
     os.path.dirname(os.path.abspath(sys.executable))
     if getattr(sys, "frozen", False)
@@ -40,6 +42,31 @@ except PermissionError as e:
     messagebox.showerror(
         "Lỗi quyền truy cập",
         f"Không thể ghi trong thư mục bộ cài:\n{APP_DIR}\n\nChi tiết: {e}\n"
+        "👉 Vui lòng chạy bằng quyền Administrator."
+    )
+    sys.exit(1)"""
+if getattr(sys, "frozen", False):
+    # Đang chạy file .exe -> trỏ tới thư mục chứa file .exe thật sự
+    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CONFIG_FILE = os.path.join(APP_DIR, "db_config.json")
+LOG_DIR = os.path.join(APP_DIR, "Log")
+SECRET_KEY_FILE = os.path.join(APP_DIR, "secret.key")
+UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
+
+# 🔧 Tự tạo các file/thư mục cần thiết tại nơi đặt .exe
+try:
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"configs": []}, f, indent=2, ensure_ascii=False)
+except Exception as e:
+    messagebox.showerror(
+        "Lỗi quyền truy cập",
+        f"Không thể tạo file/ thư mục cấu hình tại {APP_DIR}\n\nChi tiết: {e}\n"
         "👉 Vui lòng chạy bằng quyền Administrator."
     )
     sys.exit(1)
