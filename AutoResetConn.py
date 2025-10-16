@@ -36,11 +36,27 @@ selected_label = None
 last_selected_name = ""
 
 # ===================== AUTO UPDATER =====================
-CURRENT_VERSION = "5.0.0"  # Cập nhật số này mỗi khi build tool mới
+"""CURRENT_VERSION = "5.0.0"  # Cập nhật số này mỗi khi build tool mới
 VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/refs/heads/main/version.txt"
 FILES_TO_UPDATE = {
     # key = đường local cần ghi, value = URL raw trên GitHub
     "core/AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/refs/heads/main/core/AutoResetConn.py"
+}
+UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")"""
+
+def get_current_version():
+    """Đọc version hiện tại từ file version_local.txt (hoặc mặc định nếu chưa có)."""
+    try:
+        with open("version_local.txt", "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "5.0.0"  # bản mặc định khi chạy lần đầu (chỉ dùng khi file chưa có)
+
+CURRENT_VERSION = get_current_version()
+VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/version.txt"
+FILES_TO_UPDATE = {
+    # key = đường local cần ghi, value = URL raw trên GitHub
+    "core/AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py"
 }
 UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
 
@@ -60,7 +76,15 @@ def log_update(msg: str):
         pass
     print(line)
     _buf(line)
-
+    
+def get_current_version():
+    """Đọc version hiện tại từ file version_local.txt (hoặc mặc định nếu chưa có)"""
+    try:
+        with open("version_local.txt", "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "5.0.0"  # bản mặc định khi chạy lần đầu
+    
 def check_for_update(auto_restart=False):
     """Kiểm tra version.txt trên GitHub; nếu khác CURRENT_VERSION thì tải FILES_TO_UPDATE."""
     try:
