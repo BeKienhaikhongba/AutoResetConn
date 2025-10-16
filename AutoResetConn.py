@@ -8,6 +8,9 @@ Auto Reset DB Tool + Auto-Updater (Full) v5.0
 - Danh sách cấu hình hiển thị dạng list highlight (không radio)
 - Nút Lưu bị disable khi đang chọn cấu hình
 - Auto-Updater: kiểm tra version trên GitHub, tải file core/... mới (nếu có)
+
+Author: BeKienhaikhongba
+Date: 2024-06-20
 """
 
 import tkinter as tk
@@ -425,6 +428,12 @@ def stop_auto_reset():
 app = tk.Tk()
 app.title(f"Auto Reset DB Tool v{CURRENT_VERSION}")
 app.geometry("980x630")
+
+# 🧩 Đặt icon cho cửa sổ app
+try:
+    app.iconbitmap("server.ico")  # dùng file icon trong thư mục
+except Exception as e:
+    print(f"⚠️ Không thể đặt icon: {e}")
 
 # LEFT FORM
 frame_left = tk.Frame(app)

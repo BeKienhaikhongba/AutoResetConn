@@ -3,3 +3,5 @@
 [2025-10-16 11:15:32] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/refs/heads/main/core/AutoResetConn.py
 [2025-10-16 11:15:33] ✅ Cập nhật thành công: core/AutoResetConn.py
 [2025-10-16 11:15:33] 🎉 Hoàn tất cập nhật → phiên bản 4.9.3
+[2025-10-16 11:22:03] 🔍 Kiểm tra cập nhật (hiện tại: 5.0.0)...
+[2025-10-16 11:22:04] ✅ Đang dùng bản mới nhất.
