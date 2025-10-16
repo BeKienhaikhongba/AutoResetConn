@@ -1,0 +1,22 @@
+{
+  "configs": [
+    {
+      "name": "test_bvNTND",
+      "host": "ehcg1.ddns.net",
+      "port": "7001",
+      "db": "test_bvntnd",
+      "user": "postgres",
+      "password": "gAAAAABo70Kf7G2LSvhrZxEkUZZz_3ovvVyNPiGfRQjcuCXaVQ6eBZo__2asBS-zA3dK0zvNgbyO6U1NQX1usfzP6ry3r3bI8Uqol4bAv50E0D28ZZoxfNs=",
+      "created": "2025-10-15 13:43:43"
+    },
+    {
+      "name": "test_bvNTND_v3",
+      "host": "ehcg1.ddns.net",
+      "port": "7001",
+      "db": "test_bvntnd",
+      "user": "postgres",
+      "password": "gAAAAABo8Ee2E-DEjh_FmVXQfV0vO-z0XyDiK8aDTlI4znx-1HzTu5U0KldDFJwRUtp03HbTZseZZs6m5pCwEfWJ9uTh1h_ZkqFtZvhad6Ta_4Sq2ZqpgHA=",
+      "created": "2025-10-16 08:17:42"
+    }
+  ]
+}

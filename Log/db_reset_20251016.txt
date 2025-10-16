@@ -1,0 +1,35 @@
+[2025-10-16 08:09:37] 🚀 Tool v4.9.1 khởi động thành công.
+[2025-10-16 08:09:43] 📄 Hiển thị cấu hình: test_bvNTND
+[2025-10-16 08:09:48] 🔄 [test_bvNTND] Reset DB port 7001 (Manual)
+[2025-10-16 08:10:16] 🛑 Auto reset stopped.
+[2025-10-16 08:10:18] ▶️ Auto reset started.
+[2025-10-16 08:10:19] 🔄 [test_bvNTND] Reset DB port 7001 (Auto)
+[2025-10-16 08:10:19] ⏰ Waiting 1 hour before next reset...
+
+[2025-10-16 08:10:25] 🛑 Auto reset stopped.
+[2025-10-16 08:11:24] 📄 Hiển thị cấu hình: test_bvNTND_v1
+[2025-10-16 08:11:30] ✏️ Đang chỉnh sửa cấu hình...
+[2025-10-16 08:11:34] ✅ Cập nhật cấu hình 'test_bvNTND_v1' → 'test_bvNTND_v2'.
+[2025-10-16 08:11:38] ▶️ Auto reset started.
+[2025-10-16 08:11:39] 🔄 [test_bvNTND_v2] Reset DB port 7001 (Auto)
+[2025-10-16 08:11:39] ⏰ Waiting 1 hour before next reset...
+
+[2025-10-16 08:11:46] 🔄 [test_bvNTND_v2] Reset DB port 7001 (Manual)
+[2025-10-16 08:11:50] 🛑 Auto reset stopped.
+[2025-10-16 08:17:37] 📄 Hiển thị cấu hình: test_bvNTND_v2
+[2025-10-16 08:17:40] ✏️ Đang chỉnh sửa cấu hình...
+[2025-10-16 08:17:42] ✅ Cập nhật cấu hình 'test_bvNTND_v2' → 'test_bvNTND_v3'.
+[2025-10-16 08:17:46] 🔄 [test_bvNTND_v3] Reset DB port 7001 (Manual)
+[2025-10-16 09:05:22] 🚀 Tool v4.9.1 khởi động thành công.
+[2025-10-16 09:07:07] 🚀 Tool v4.9.1 khởi động thành công.
+[2025-10-16 09:07:49] 🚀 Tool v4.9.1 khởi động thành công.
+[2025-10-16 09:13:04] 🚀 Tool v4.9.1 khởi động thành công.
+[2025-10-16 09:13:14] 🚀 Tool v4.9.1 khởi động thành công.
+[2025-10-16 09:13:18] 📄 Hiển thị cấu hình: test_bvNTND
+[2025-10-16 09:13:22] 🧹 Làm mới form (chế độ nhập mới).
+[2025-10-16 09:13:32] 🧹 Làm mới form (chế độ nhập mới).
+[2025-10-16 09:17:04] 🚀 Tool v4.9.1 khởi động thành công.
+[2025-10-16 09:17:06] 🧹 Làm mới form (chế độ nhập mới).
+[2025-10-16 09:17:08] 📄 Hiển thị cấu hình: test_bvNTND_v3
+[2025-10-16 09:17:11] 🧹 Làm mới form (chế độ nhập mới).
+[2025-10-16 09:31:30] 🚀 Tool v4.9.1 khởi động thành công.
