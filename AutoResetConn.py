@@ -1,74 +1,72 @@
 # -*- coding: utf-8 -*-
 """
-Auto Reset DB Tool + Auto-Updater (Full) v5.0
+Auto Reset DB Tool + Auto-Updater (Full) v5.1
 - UI Tkinter quản lý cấu hình DB (lưu/ sửa/ xóa/ dùng)
-- Reset kết nối PostgreSQL thủ công/ tự động mỗi 1 giờ
+- Reset kết nối PostgreSQL thủ công / tự động mỗi 1 giờ
 - Log ra file TXT theo ngày: Log/db_reset_YYYYMMDD.txt
 - Mã hóa password bằng Fernet (secret.key lưu trong thư mục app)
-- Danh sách cấu hình hiển thị dạng list highlight (không radio)
-- Nút Lưu bị disable khi đang chọn cấu hình
 - Auto-Updater: kiểm tra version trên GitHub, tải file core/... mới (nếu có)
-
+- Tự tạo thư mục Log, file cấu hình và secret.key nếu chưa có
 Author: BeKienhaikhongba
-Date: 2024-06-20
 """
 
+import os, sys, json, time, threading
+from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, Menu, Canvas
-import json, os, time, threading
-from datetime import datetime
+import requests
 import psycopg2
 from cryptography.fernet import Fernet
-import requests  # dùng cho auto-updater
 
-# ===================== CONFIG CHUNG =====================
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
+# ===================== APP PATH & FILES =====================
+APP_DIR = (
+    os.path.dirname(os.path.abspath(sys.executable))
+    if getattr(sys, "frozen", False)
+    else os.path.dirname(os.path.abspath(__file__))
+)
 CONFIG_FILE = os.path.join(APP_DIR, "db_config.json")
 LOG_DIR = os.path.join(APP_DIR, "Log")
-SECRET_KEY_FILE = "secret.key"
-SECRET_KEY_PATH = os.path.join(APP_DIR, SECRET_KEY_FILE)
+SECRET_KEY_FILE = os.path.join(APP_DIR, "secret.key")
+UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
 
-running = False
-reset_thread = None
-CONFIG_CACHE = []
-edit_mode = False
-selected_label = None
-last_selected_name = ""
+# Khởi tạo thư mục/ file cần thiết
+try:
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"configs": []}, f, indent=2, ensure_ascii=False)
+except PermissionError as e:
+    messagebox.showerror(
+        "Lỗi quyền truy cập",
+        f"Không thể ghi trong thư mục bộ cài:\n{APP_DIR}\n\nChi tiết: {e}\n"
+        "👉 Vui lòng chạy bằng quyền Administrator."
+    )
+    sys.exit(1)
 
-# ===================== AUTO UPDATER =====================
-"""CURRENT_VERSION = "5.0.0"  # Cập nhật số này mỗi khi build tool mới
-VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/refs/heads/main/version.txt"
-FILES_TO_UPDATE = {
-    # key = đường local cần ghi, value = URL raw trên GitHub
-    "core/AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/refs/heads/main/core/AutoResetConn.py"
-}
-UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")"""
-
+# ===================== AUTO-UPDATER =====================
 def get_current_version():
     """Đọc version hiện tại từ file version_local.txt (hoặc mặc định nếu chưa có)."""
+    vf = os.path.join(APP_DIR, "version_local.txt")
     try:
-        with open("version_local.txt", "r", encoding="utf-8") as f:
+        with open(vf, "r", encoding="utf-8") as f:
             return f.read().strip()
     except FileNotFoundError:
-        return "5.0.0"  # bản mặc định khi chạy lần đầu (chỉ dùng khi file chưa có)
+        return "5.0.0"  # lần đầu chạy
 
 CURRENT_VERSION = get_current_version()
 VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/version.txt"
+# Tùy repo của bạn: nếu file bạn muốn cập nhật nằm ở core/AutoResetConn.py thì giữ như dưới
 FILES_TO_UPDATE = {
-    # key = đường local cần ghi, value = URL raw trên GitHub
     "core/AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py"
 }
-UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
 
-# Buffer tạm để hiển thị log auto-update vào UI sau khi UI sẵn sàng
+# Buffer log updater → sẽ đẩy vào UI sau khi UI sẵn sàng
 _UPDATE_UI_BUFFER = []
-def _buf(msg: str):
-    _UPDATE_UI_BUFFER.append(msg)
+def _buf(msg): _UPDATE_UI_BUFFER.append(msg)
 
-def log_update(msg: str):
-    """Ghi log auto-update ra file + buffer hiển thị lên UI sau khi UI có."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{timestamp}] {msg}"
+def log_update(msg):
+    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
     try:
         with open(UPDATE_LOG, "a", encoding="utf-8") as f:
             f.write(line + "\n")
@@ -76,52 +74,21 @@ def log_update(msg: str):
         pass
     print(line)
     _buf(line)
-    
-def get_current_version():
-    """Đọc version hiện tại từ file version_local.txt (hoặc mặc định nếu chưa có)"""
-    try:
-        with open("version_local.txt", "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return "5.0.0"  # bản mặc định khi chạy lần đầu
-    
-def check_for_update(auto_restart=False):
-    """Kiểm tra version.txt trên GitHub; nếu khác CURRENT_VERSION thì tải FILES_TO_UPDATE."""
-    try:
-        log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...")
-        r = requests.get(VERSION_URL, timeout=7)
-        if r.status_code != 200:
-            log_update("⚠️ Không lấy được version từ server.")
-            return False
 
-        remote_ver = r.text.strip()
-        if remote_ver == CURRENT_VERSION:
-            log_update("✅ Đang dùng bản mới nhất.")
-            return False
-
-        log_update(f"🔔 Phát hiện bản mới: v{remote_ver} → bắt đầu tải...")
-        download_and_replace(remote_ver, auto_restart)
-        return True
-    except Exception as e:
-        log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}")
-        return False
-
-def download_and_replace(remote_ver: str, auto_restart: bool):
-    """Tải các file trong FILES_TO_UPDATE và ghi đè an toàn."""
+def download_and_replace(remote_ver, auto_restart=False):
     try:
-        for local_rel, url in FILES_TO_UPDATE.items():
-            dst = os.path.join(APP_DIR, local_rel)
+        for rel, url in FILES_TO_UPDATE.items():
+            dst = os.path.join(APP_DIR, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
-            log_update(f"⏬ Tải {local_rel} từ {url}")
+            log_update(f"⏬ Tải {rel} từ {url}")
             r = requests.get(url, timeout=15)
             if r.status_code != 200:
                 log_update(f"❌ Không tải được {url} (status={r.status_code})")
                 continue
             with open(dst, "w", encoding="utf-8") as f:
                 f.write(r.text)
-            log_update(f"✅ Cập nhật thành công: {local_rel}")
+            log_update(f"✅ Cập nhật thành công: {rel}")
 
-        # Ghi lại version tải được (tham khảo)
         with open(os.path.join(APP_DIR, "version_local.txt"), "w", encoding="utf-8") as f:
             f.write(remote_ver)
         log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}")
@@ -129,52 +96,75 @@ def download_and_replace(remote_ver: str, auto_restart: bool):
         if auto_restart:
             log_update("🔁 Khởi động lại để áp dụng cập nhật...")
             time.sleep(1)
-            os.execl(os.sys.executable, os.sys.executable, *os.sys.argv)
+            os.execl(sys.executable, sys.executable, *sys.argv)
 
     except Exception as e:
         log_update(f"❌ Lỗi khi cập nhật: {e}")
 
-# Gọi auto updater NGAY khi khởi động (log sẽ buffer, UI xuất hiện sẽ flush ra log UI)
+def check_for_update(auto_restart=False):
+    try:
+        log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...")
+        r = requests.get(VERSION_URL, timeout=7)
+        if r.status_code != 200:
+            log_update("⚠️ Không lấy được version từ server.")
+            return
+        remote_ver = r.text.strip()
+        if remote_ver == CURRENT_VERSION:
+            log_update("✅ Đang dùng bản mới nhất.")
+            return
+        log_update(f"🔔 Phát hiện bản mới: v{remote_ver} → bắt đầu tải...")
+        download_and_replace(remote_ver, auto_restart)
+    except Exception as e:
+        log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}")
+
+# Gọi updater sớm (log sẽ buffer, UI lên sẽ flush)
 check_for_update(auto_restart=False)
 
-# ===================== ENCRYPTION (Fernet) =====================
+# ===================== ENCRYPTION =====================
 def load_or_create_key():
     try:
-        if not os.path.exists(SECRET_KEY_PATH):
+        if not os.path.exists(SECRET_KEY_FILE):
             key = Fernet.generate_key()
-            with open(SECRET_KEY_PATH, "wb") as f:
+            with open(SECRET_KEY_FILE, "wb") as f:
                 f.write(key)
         else:
-            with open(SECRET_KEY_PATH, "rb") as f:
+            with open(SECRET_KEY_FILE, "rb") as f:
                 key = f.read()
         return Fernet(key)
     except Exception as e:
         messagebox.showerror("Lỗi tạo key", str(e))
-        raise SystemExit
+        sys.exit(1)
 
 fernet = load_or_create_key()
 def encrypt_password(p): return fernet.encrypt(p.encode()).decode()
 def decrypt_password(p):
-    try:
-        return fernet.decrypt(p.encode()).decode()
-    except Exception:
-        return "•••••"
+    try: return fernet.decrypt(p.encode()).decode()
+    except: return "•••••"
+
+# ===================== GLOBAL STATE =====================
+running = False
+reset_thread = None
+CONFIG_CACHE = []
+edit_mode = False
+selected_label = None
+last_selected_name = ""
 
 # ===================== LOGGING (TXT/ngày) =====================
-def get_log_file():
-    today = datetime.now().strftime("%Y%m%d")
-    if not os.path.exists(LOG_DIR):
-        os.makedirs(LOG_DIR)
-    return os.path.join(LOG_DIR, f"db_reset_{today}.txt")
+def _log_file_today():
+    return os.path.join(LOG_DIR, f"db_reset_{datetime.now():%Y%m%d}.txt")
 
 def log_message(msg):
-    # Ghi UI
-    log_area.insert(tk.END, msg + "\n")
-    log_area.yview(tk.END)
-    # Ghi file
+    # phần UI (được gắn sau khi UI tạo)
     try:
-        with open(get_log_file(), "a", encoding="utf-8") as f:
-            f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}\n")
+        log_area.insert(tk.END, msg + "\n")
+        log_area.yview(tk.END)
+    except Exception:
+        pass
+    # phần file
+    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
+    try:
+        with open(_log_file_today(), "a", encoding="utf-8") as f:
+            f.write(line + "\n")
     except Exception:
         pass
 
@@ -183,11 +173,18 @@ def clear_log_display():
     log_message("🧹 Log hiển thị đã được làm mới (file log vẫn giữ nguyên).")
 
 def flush_update_buffer_to_ui():
-    """Đưa những dòng log auto-update đã buffer vào khu vực log UI."""
     if _UPDATE_UI_BUFFER:
         for line in _UPDATE_UI_BUFFER:
             log_message(f"[AutoUpdate] {line}")
         _UPDATE_UI_BUFFER.clear()
+
+def refresh_title_from_local_version(app):
+    """Sau khi UI sẵn sàng, đọc lại version_local để set title đúng (nếu vừa update)."""
+    try:
+        v2 = get_current_version()
+        app.title(f"Auto Reset DB Tool v{v2}")
+    except Exception:
+        pass
 
 # ===================== CONFIG MANAGEMENT =====================
 def load_config_cache():
@@ -249,9 +246,11 @@ def clear_form():
 def add_new_config():
     name = entry_server.get().strip()
     if not name or entry_server.cget("fg") == "gray":
-        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên Server."); return
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên Server.")
+        return
     if any(c["name"].lower() == name.lower() for c in CONFIG_CACHE):
-        messagebox.showerror("Trùng tên", f"Cấu hình '{name}' đã tồn tại!"); return
+        messagebox.showerror("Trùng tên", f"Cấu hình '{name}' đã tồn tại!")
+        return
     required = [
         entry_host.get().strip() if entry_host.cget("fg") != "gray" else "",
         entry_port.get().strip() if entry_port.cget("fg") != "gray" else "",
@@ -259,7 +258,8 @@ def add_new_config():
         entry_user.get().strip()
     ]
     if any(v == "" for v in required):
-        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ Host, Port, DB, User."); return
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ Host, Port, DB, User.")
+        return
 
     cfg = {
         "name": name,
@@ -289,18 +289,18 @@ def on_select_config(cfg_name):
 
     last_selected_name = cfg_name
     cfg = next((c for c in CONFIG_CACHE if c["name"] == cfg_name), None)
-    if not cfg: return
+    if not cfg:
+        return
 
-    # highlight dòng chọn
+    # highlight
     for w in scroll_frame.winfo_children(): w.config(bg="white")
     selected_label = [w for w in scroll_frame.winfo_children() if w.cget("text") == cfg_name][0]
     selected_label.config(bg="#cce5ff")
 
-    # đổ dữ liệu & khóa form (read-only)
+    # đổ dữ liệu & khóa form
     set_entry_state(False)
-    entry_host.config(fg="black"); entry_port.config(fg="black")
-    entry_db.config(fg="black"); entry_user.config(fg="black")
-    entry_server.config(fg="black")
+    for e in (entry_host, entry_port, entry_db, entry_user, entry_server):
+        e.config(fg="black")
     entry_host.delete(0, tk.END); entry_host.insert(0, cfg["host"])
     entry_port.delete(0, tk.END); entry_port.insert(0, cfg["port"])
     entry_db.delete(0, tk.END); entry_db.insert(0, cfg["db"])
@@ -316,7 +316,8 @@ def on_select_config(cfg_name):
 def toggle_edit_mode():
     global edit_mode
     if not last_selected_name:
-        messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để sửa."); return
+        messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để sửa.")
+        return
     if not edit_mode:
         set_entry_state(False)
         edit_mode = True
@@ -328,7 +329,8 @@ def save_edit_changes():
     old_name = last_selected_name
     new_name = entry_server.get().strip()
     if any(c["name"].lower() == new_name.lower() and c["name"].lower() != old_name.lower() for c in CONFIG_CACHE):
-        messagebox.showerror("Tên bị trùng", f"Tên '{new_name}' đã tồn tại!"); return
+        messagebox.showerror("Tên bị trùng", f"Tên '{new_name}' đã tồn tại!")
+        return
 
     for i, c in enumerate(CONFIG_CACHE):
         if c["name"].lower() == old_name.lower():
@@ -353,8 +355,7 @@ def delete_config():
     global last_selected_name
     name = last_selected_name
     if not name: return
-    if not messagebox.askyesno("Xác nhận",
-                               f"Bạn có chắc chắn muốn xóa '{name}'?\nSau khi xóa sẽ không thể khôi phục."):
+    if not messagebox.askyesno("Xác nhận", f"Bạn có chắc chắn muốn xóa '{name}'?\nThao tác không thể khôi phục."):
         return
     CONFIG_CACHE[:] = [c for c in CONFIG_CACHE if c["name"] != name]
     save_config_cache()
@@ -453,11 +454,11 @@ app = tk.Tk()
 app.title(f"Auto Reset DB Tool v{CURRENT_VERSION}")
 app.geometry("980x630")
 
-# 🧩 Đặt icon cho cửa sổ app
+# Icon cửa sổ (tuỳ chọn)
 try:
-    app.iconbitmap("server.ico")  # dùng file icon trong thư mục
+    app.iconbitmap("server.ico")
 except Exception as e:
-    print(f"⚠️ Không thể đặt icon: {e}")
+    print("⚠️ Không thể đặt icon:", e)
 
 # LEFT FORM
 frame_left = tk.Frame(app)
@@ -528,6 +529,7 @@ log_area.bind("<Button-3>", lambda e: log_menu.tk_popup(e.x_root, e.y_root))
 # INIT
 load_config_cache()
 refresh_data_list()
-flush_update_buffer_to_ui()  # đưa log auto-update đã buffer vào UI
-log_message(f"🚀 Tool v{CURRENT_VERSION} khởi động thành công.")
+flush_update_buffer_to_ui()
+refresh_title_from_local_version(app)  # nếu vừa update mà không restart, title vẫn đúng
+log_message("🚀 Tool khởi động thành công.")
 app.mainloop()
