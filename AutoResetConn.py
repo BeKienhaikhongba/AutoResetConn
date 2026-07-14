@@ -85,6 +85,7 @@ CURRENT_VERSION = get_current_version()
 VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/version.txt"
 # Tùy repo của bạn: nếu file bạn muốn cập nhật nằm ở core/AutoResetConn.py thì giữ như dưới
 FILES_TO_UPDATE = {
+    "AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py",
     "core/AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py"
 }
 
@@ -467,7 +468,9 @@ def reset_connection(manual=False):
                 cur.execute("""
                     SELECT pg_terminate_backend(pid)
                     FROM pg_stat_activity
-                    WHERE pid <> pg_backend_pid();
+                    WHERE pid <> pg_backend_pid()
+                    AND state = 'idle'
+                    AND state_change < current_timestamp - INTERVAL '1' MINUTE;
                 """)
             conn.commit()
             conn.close()
