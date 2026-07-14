@@ -632,7 +632,7 @@ def launch_signature_cropper():
     global electron_process, electron_hwnd, is_launching
     
     try:
-        notebook.select(tab_signature)
+        switch_tab(1)
     except Exception:
         pass
 
@@ -722,30 +722,25 @@ try:
 except Exception as e:
     print("⚠️ Không thể đặt icon:", e)
 
-# Cấu hình notebook
-style = ttk.Style()
-style.theme_use("default")
-style.configure("TNotebook", background="#121214", borderwidth=0)
-style.configure("TNotebook.Tab", 
-                background="#1a1a24", 
-                foreground="#a1a1aa", 
-                padding=[18, 6], 
-                font=("Segoe UI", 10, "bold"),
-                borderwidth=0)
-style.map("TNotebook.Tab",
-          background=[("selected", "#6366f1")],
-          foreground=[("selected", "#ffffff")])
+# Cấu hình thanh điều hướng trên cùng (Custom Navigation Bar)
+frame_navbar = tk.Frame(app, bg="#1a1a24", height=45)
+frame_navbar.pack(fill="x", side="top")
+frame_navbar.pack_propagate(False)
 
-notebook = ttk.Notebook(app)
-notebook.pack(fill="both", expand=True)
+# Đường kẻ phân tách mỏng
+divider = tk.Frame(app, bg="#2d2d3a", height=1)
+divider.pack(fill="x", side="top")
+
+# Khung chứa nội dung chính
+frame_content = tk.Frame(app, bg="#121214")
+frame_content.pack(fill="both", expand=True)
 
 # Tab 1: Reset Connect
-tab_reset = tk.Frame(notebook, bg="#121214")
-notebook.add(tab_reset, text="Reset Connect")
+tab_reset = tk.Frame(frame_content, bg="#121214")
+tab_reset.pack(fill="both", expand=True)
 
 # Tab 2: Signature Cropper
-tab_signature = tk.Frame(notebook, bg="#121214")
-notebook.add(tab_signature, text="Signature Cropper")
+tab_signature = tk.Frame(frame_content, bg="#121214")
 
 # Khung chứa nhúng cho Tab 2
 frame_embed = tk.Frame(tab_signature, bg="#121214")
@@ -754,14 +749,55 @@ frame_embed.bind("<Configure>", resize_electron)
 
 lbl_loading = tk.Label(frame_embed, text="Đang khởi chạy Signature Cropper...", fg="#6366f1", bg="#121214", font=("Segoe UI", 12, "bold"))
 
-# Lắng nghe sự kiện chuyển Tab
-def on_tab_changed(event):
-    selected_tab = notebook.select()
-    if notebook.index(selected_tab) == 1:
+# Nút tab điều khiển
+btn_tab_reset = tk.Button(frame_navbar, text="🔌 Reset Connect", 
+                          bg="#6366f1", fg="#ffffff", activebackground="#4f46e5", activeforeground="#ffffff",
+                          relief="flat", bd=0, font=("Segoe UI", 10, "bold"), cursor="hand2", padx=20)
+btn_tab_reset.pack(side="left", fill="y")
+
+btn_tab_sig = tk.Button(frame_navbar, text="🖋️ Signature Cropper", 
+                        bg="#1a1a24", fg="#a1a1aa", activebackground="#27272a", activeforeground="#ffffff",
+                        relief="flat", bd=0, font=("Segoe UI", 10, "bold"), cursor="hand2", padx=20)
+btn_tab_sig.pack(side="left", fill="y")
+
+def refresh_tab_headers(active_tab):
+    if active_tab == 0:
+        btn_tab_reset.config(bg="#6366f1", fg="#ffffff")
+        btn_tab_reset.bind("<Enter>", lambda e: None)
+        btn_tab_reset.bind("<Leave>", lambda e: None)
+        
+        btn_tab_sig.config(bg="#1a1a24", fg="#a1a1aa")
+        btn_tab_sig.bind("<Enter>", lambda e: btn_tab_sig.config(bg="#27272a", fg="#ffffff"))
+        btn_tab_sig.bind("<Leave>", lambda e: btn_tab_sig.config(bg="#1a1a24", fg="#a1a1aa"))
+    else:
+        btn_tab_sig.config(bg="#6366f1", fg="#ffffff")
+        btn_tab_sig.bind("<Enter>", lambda e: None)
+        btn_tab_sig.bind("<Leave>", lambda e: None)
+        
+        btn_tab_reset.config(bg="#1a1a24", fg="#a1a1aa")
+        btn_tab_reset.bind("<Enter>", lambda e: btn_tab_reset.config(bg="#27272a", fg="#ffffff"))
+        btn_tab_reset.bind("<Leave>", lambda e: btn_tab_reset.config(bg="#1a1a24", fg="#a1a1aa"))
+
+def switch_tab(tab_index):
+    if tab_index == 0:
+        refresh_tab_headers(0)
+        tab_signature.pack_forget()
+        tab_reset.pack(fill="both", expand=True)
+    else:
+        refresh_tab_headers(1)
+        tab_reset.pack_forget()
+        tab_signature.pack(fill="both", expand=True)
         if not electron_hwnd:
             launch_signature_cropper()
+        else:
+            resize_electron()
 
-notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
+# Gán sự kiện click cho các Tab button
+btn_tab_reset.config(command=lambda: switch_tab(0))
+btn_tab_sig.config(command=lambda: switch_tab(1))
+
+# Thiết lập hover mặc định cho tab inactive ban đầu
+refresh_tab_headers(0)
 
 # Cấu hình grid cho Tab Reset
 tab_reset.columnconfigure(0, weight=1)
