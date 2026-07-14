@@ -10,7 +10,7 @@ Auto Reset DB Tool + Auto-Updater (Full) v5.1
 Author: BeKienhaikhongba
 """
 
-import os, sys, json, time, threading
+import os, sys, json, time, threading, subprocess
 from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, Menu, Canvas, ttk
@@ -530,6 +530,40 @@ def stop_auto_reset():
     entry_interval.config(state="normal")
     combo_unit.config(state="readonly")
 
+def launch_signature_cropper():
+    add_chuky_dir = os.path.join(APP_DIR, "AddChuKy")
+    if not os.path.exists(add_chuky_dir):
+        messagebox.showerror(
+            "Không tìm thấy thư mục",
+            f"Không tìm thấy thư mục 'AddChuKy' tại:\n{add_chuky_dir}"
+        )
+        return
+
+    # Đường dẫn executable bản release
+    exe_path = os.path.join(
+        add_chuky_dir,
+        "release",
+        "Tool Cut Image-win32-x64",
+        "Tool Cut Image.exe"
+    )
+
+    if os.path.exists(exe_path):
+        log_message("🖋️ Khởi chạy Signature Cropper (bản đóng gói)...")
+        try:
+            subprocess.Popen([exe_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
+        except Exception as e:
+            messagebox.showerror("Lỗi khởi chạy", f"Không thể mở file exe:\n{e}")
+    else:
+        # Bản dev: Chạy bằng npm run electron:dev
+        log_message("🖋️ Khởi chạy Signature Cropper (bản dev)...")
+        try:
+            if sys.platform.startswith('win'):
+                subprocess.Popen("npm run electron:dev", shell=True, cwd=add_chuky_dir)
+            else:
+                subprocess.Popen(["npm", "run", "electron:dev"], cwd=add_chuky_dir)
+        except Exception as e:
+            messagebox.showerror("Lỗi khởi chạy", f"Không thể khởi chạy qua npm:\n{e}\n\n👉 Hãy chắc chắn đã cài Node.js/npm.")
+
 # ===================== UI =====================
 def create_modern_button(parent, text, bg, hover_bg, command, fg="#ffffff", font_size=10, font_weight="bold"):
     btn = tk.Button(parent, text=text, bg=bg, fg=fg, activebackground=hover_bg, 
@@ -686,6 +720,9 @@ btn_auto.grid(row=2, column=0, sticky="we", padx=4, pady=3, ipady=1)
 btn_stop = create_modern_button(frame_form_buttons, "🛑 Dừng", "#27272a", "#dc2626", stop_auto_reset)
 btn_stop.grid(row=2, column=1, sticky="we", padx=4, pady=3, ipady=1)
 btn_stop.config(state="disabled", cursor="arrow")
+
+btn_signature = create_modern_button(frame_form_buttons, "🖋️ Signature Cropper", "#6366f1", "#4f46e5", launch_signature_cropper)
+btn_signature.grid(row=3, column=0, columnspan=2, sticky="we", padx=4, pady=3, ipady=1)
 
 # RIGHT LIST (CARD)
 frame_right = tk.Frame(app, bg="#1a1a24", padx=25, pady=20, highlightthickness=1, highlightbackground="#2d2d3a")

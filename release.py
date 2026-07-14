@@ -61,7 +61,7 @@ def main():
     # 2. Chạy các lệnh Git
     print("\n📦 Đang tiến hành push lên Git...")
     commands = [
-        ["git", "add", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py"],
+        ["git", "add", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", ".gitignore", "AddChuKy/"],
         ["git", "commit", "-m", f"Release v{next_ver}"],
         ["git", "push"]
     ]

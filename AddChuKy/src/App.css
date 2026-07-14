@@ -1,0 +1,25 @@
+.left-panel {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--panel-bg);
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  position: relative;
+}
+
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--panel-bg);
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+}
