@@ -282,7 +282,6 @@ def clear_form():
     btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
     btn_save.config(state="normal")  # bật lại Lưu cấu hình
     hide_action_buttons()
-    log_message("🧹 Làm mới form (chế độ nhập mới).")
 
 def add_new_config():
     name = entry_server.get().strip()
@@ -316,7 +315,6 @@ def add_new_config():
     CONFIG_CACHE.append(cfg)
     save_config_cache()
     refresh_data_list()
-    log_message(f"💾 Thêm cấu hình mới: {name}")
     messagebox.showinfo("Thành công", f"Đã thêm cấu hình '{name}'.")
 
 def on_select_config(cfg_name):
@@ -361,7 +359,6 @@ def on_select_config(cfg_name):
 
     show_action_buttons()
     btn_save.config(state="disabled")
-    log_message(f"📄 Hiển thị cấu hình: {cfg_name}")
 
 def toggle_edit_mode():
     global edit_mode
@@ -372,7 +369,6 @@ def toggle_edit_mode():
         set_entry_state(False)
         edit_mode = True
         btn_edit.config(text="💾 Lưu", bg="#3b82f6", command=save_edit_changes)
-        log_message("✏️ Đang chỉnh sửa cấu hình...")
 
 def save_edit_changes():
     global edit_mode
@@ -398,7 +394,6 @@ def save_edit_changes():
             break
     save_config_cache()
     refresh_data_list()
-    log_message(f"✅ Cập nhật cấu hình '{old_name}' → '{new_name}'.")
     edit_mode = False
     btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
     btn_save.config(state="normal")
@@ -413,7 +408,6 @@ def delete_config():
     save_config_cache()
     refresh_data_list()
     clear_form()
-    log_message(f"🗑 Đã xóa cấu hình: {name}")
 
 def refresh_data_list():
     for w in scroll_frame.winfo_children(): w.destroy()
@@ -739,5 +733,4 @@ load_config_cache()
 refresh_data_list()
 flush_update_buffer_to_ui()
 refresh_title_from_local_version(app)
-log_message("🚀 Tool khởi động thành công.")
 app.mainloop()
