@@ -120,11 +120,36 @@ def download_and_replace(remote_ver, auto_restart=False):
         with open(os.path.join(APP_DIR, "version_local.txt"), "w", encoding="utf-8") as f:
             f.write(remote_ver)
         log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}")
+        CURRENT_VERSION = remote_ver
 
         if auto_restart:
+            try:
+                import tkinter as tk
+                from tkinter import messagebox
+                root = tk.Tk()
+                root.withdraw()
+                messagebox.showinfo(
+                    "Cập nhật hoàn tất",
+                    f"Đã tự động tải thành công phiên bản mới v{remote_ver}!\n\n"
+                    "👉 Click OK để tự động khởi động lại ứng dụng."
+                )
+                root.destroy()
+            except Exception:
+                pass
             log_update("🔁 Khởi động lại để áp dụng cập nhật...")
             time.sleep(1)
             os.execl(sys.executable, sys.executable, *sys.argv)
+        else:
+            if 'app' in globals() and app:
+                try:
+                    app.after(0, lambda: refresh_title_from_local_version(app))
+                    app.after(0, lambda: messagebox.showinfo(
+                        "Cập nhật hoàn tất",
+                        f"Đã tự động tải thành công phiên bản mới v{remote_ver}!\n\n"
+                        "👉 Vui lòng khởi động lại ứng dụng để áp dụng thay đổi."
+                    ))
+                except Exception:
+                    pass
 
     except Exception as e:
         log_update(f"❌ Lỗi khi cập nhật: {e}")
