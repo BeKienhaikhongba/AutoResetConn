@@ -90,12 +90,6 @@ def set_entry_state(readonly=True):
     state = "readonly" if readonly else "normal"
     for e in [entry_host, entry_port, entry_db, entry_user, entry_pass, entry_server]:
         e.config(state=state)
-    if readonly:
-        entry_interval.config(state="readonly")
-        combo_unit.config(state="disabled")
-    else:
-        entry_interval.config(state="normal")
-        combo_unit.config(state="readonly")
 
 def set_placeholder(entry, text):
     entry.delete(0, tk.END)
@@ -320,6 +314,8 @@ def start_auto_reset():
     log_message("▶️ Auto reset started.")
     btn_auto.config(state="disabled", bg="#27272a", cursor="arrow")
     btn_stop.config(state="normal", bg="#ef4444", cursor="hand2")
+    entry_interval.config(state="readonly")
+    combo_unit.config(state="disabled")
 
 def auto_reset_loop():
     global running
@@ -356,6 +352,8 @@ def stop_auto_reset():
     log_message("🛑 Auto reset stopped.")
     btn_auto.config(state="normal", bg="#10b981", cursor="hand2")
     btn_stop.config(state="disabled", bg="#27272a", cursor="arrow")
+    entry_interval.config(state="normal")
+    combo_unit.config(state="readonly")
 
 # ===================== UI =====================
 def create_modern_button(parent, text, bg, hover_bg, command, fg="#ffffff", font_size=10, font_weight="bold"):
