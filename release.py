@@ -15,7 +15,8 @@ VERSION_FILE = os.path.join(APP_DIR, "version.txt")
 VERSION_LOCAL_FILE = os.path.join(APP_DIR, "version_local.txt")
 
 def get_next_version():
-    today_str = datetime.datetime.now().strftime("%Y.%m.%d")
+    now = datetime.datetime.now()
+    today_str = f"{now.year}.{now.month}.{now.day}"
     
     # Phiên bản mặc định đầu tiên trong ngày
     next_ver = f"{today_str}.1"
@@ -25,14 +26,16 @@ def get_next_version():
             with open(VERSION_FILE, "r", encoding="utf-8") as f:
                 current_ver = f.read().strip()
             
-            # Định dạng: YYYY.MM.DD.X
+            # Định dạng: YYYY.MM.DD.X hoặc YYYY.M.D.X
             parts = current_ver.split(".")
             if len(parts) == 4:
-                curr_date = ".".join(parts[:3])
+                curr_year = int(parts[0])
+                curr_month = int(parts[1])
+                curr_day = int(parts[2])
                 curr_x = int(parts[3])
                 
-                # Nếu trùng ngày hôm nay thì tăng chỉ số x lên 1
-                if curr_date == today_str:
+                # So sánh dạng số nguyên để bỏ qua ảnh hưởng của số 0 ở đầu
+                if curr_year == now.year and curr_month == now.month and curr_day == now.day:
                     next_ver = f"{today_str}.{curr_x + 1}"
         except Exception as e:
             print(f"⚠️ Cảnh báo khi đọc version.txt: {e}")
