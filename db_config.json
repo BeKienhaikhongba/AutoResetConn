@@ -17,6 +17,17 @@
       "user": "postgres",
       "password": "gAAAAABo8Ee2E-DEjh_FmVXQfV0vO-z0XyDiK8aDTlI4znx-1HzTu5U0KldDFJwRUtp03HbTZseZZs6m5pCwEfWJ9uTh1h_ZkqFtZvhad6Ta_4Sq2ZqpgHA=",
       "created": "2025-10-16 08:17:42"
+    },
+    {
+      "name": "bvducgiang_local",
+      "host": "192.168.16.79",
+      "port": "6688",
+      "db": "bvducgiang",
+      "user": "postgres",
+      "password": "gAAAAABqR3gOyxdhznMwNSzJwaaFn5__qYZEgLximcnYZ9isk5n9zkEhO7hTnKbI3mt0fD3ClXHR7BFcZ_MbYd8XF38s-xrhcA==",
+      "interval_val": "10",
+      "interval_unit": "Phút",
+      "created": "2026-07-03 15:51:26"
     }
   ]
 }

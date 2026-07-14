@@ -1,9 +1,0 @@
-[2025-10-16 14:11:00] [AutoUpdate] [2025-10-16 14:10:56] 🔍 Kiểm tra cập nhật (hiện tại: 4.9.3)...
-[2025-10-16 14:11:00] [AutoUpdate] [2025-10-16 14:10:57] 🔔 Phát hiện bản mới: v2025.10.16.2 → bắt đầu tải...
-[2025-10-16 14:11:00] [AutoUpdate] [2025-10-16 14:10:57] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
-[2025-10-16 14:11:00] [AutoUpdate] [2025-10-16 14:10:58] ✅ Cập nhật thành công: core/AutoResetConn.py
-[2025-10-16 14:11:00] [AutoUpdate] [2025-10-16 14:10:58] 🎉 Hoàn tất cập nhật → phiên bản 2025.10.16.2
-[2025-10-16 14:11:00] 🚀 Tool v4.9.3 khởi động thành công.
-[2025-10-16 15:53:01] [AutoUpdate] [2025-10-16 15:52:59] 🔍 Kiểm tra cập nhật (hiện tại: 2025.10.16.2)...
-[2025-10-16 15:53:01] [AutoUpdate] [2025-10-16 15:53:00] ✅ Đang dùng bản mới nhất.
-[2025-10-16 15:53:01] 🚀 Tool khởi động thành công.

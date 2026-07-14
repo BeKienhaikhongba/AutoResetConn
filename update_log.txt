@@ -12,3 +12,115 @@
 [2025-10-16 14:10:58] 🎉 Hoàn tất cập nhật → phiên bản 2025.10.16.2
 [2025-10-16 15:52:59] 🔍 Kiểm tra cập nhật (hiện tại: 2025.10.16.2)...
 [2025-10-16 15:53:00] ✅ Đang dùng bản mới nhất.
+[2026-07-02 10:56:46] 🔍 Kiểm tra cập nhật (hiện tại: 2026.6.12.1)...
+[2026-07-02 10:56:47] 🔔 Phát hiện bản mới: v<<<<<<< HEAD
+2026.6.12.1
+=======
+2026.06.30.2
+>>>>>>> 83d904b (Release v2026.7.2.1) → bắt đầu tải...
+[2026-07-02 10:56:47] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-02 10:56:47] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-02 10:56:47] 🎉 Hoàn tất cập nhật → phiên bản <<<<<<< HEAD
+2026.6.12.1
+=======
+2026.06.30.2
+>>>>>>> 83d904b (Release v2026.7.2.1)
+[2026-07-02 10:58:43] 🔍 Kiểm tra cập nhật (hiện tại: <<<<<<< HEAD
+2026.6.12.1
+=======
+2026.06.30.2
+>>>>>>> 83d904b (Release v2026.7.2.1))...
+[2026-07-02 10:58:43] ✅ Đang dùng bản mới nhất.
+[2026-07-02 11:00:21] 🔍 Kiểm tra cập nhật (hiện tại: <<<<<<< HEAD
+2026.6.12.1
+=======
+2026.06.30.2
+>>>>>>> 83d904b (Release v2026.7.2.1))...
+[2026-07-02 11:00:21] ✅ Đang dùng bản mới nhất.
+[2026-07-02 11:01:29] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.2.1)...
+[2026-07-02 11:01:29] 🔔 Phát hiện bản mới: v<<<<<<< HEAD
+2026.6.12.1
+=======
+2026.06.30.2
+>>>>>>> 83d904b (Release v2026.7.2.1) → bắt đầu tải...
+[2026-07-02 11:01:29] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-02 11:01:29] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-02 11:01:29] 🎉 Hoàn tất cập nhật → phiên bản <<<<<<< HEAD
+2026.6.12.1
+=======
+2026.06.30.2
+>>>>>>> 83d904b (Release v2026.7.2.1)
+[2026-07-02 11:02:26] 🔍 Kiểm tra cập nhật (hiện tại: <<<<<<< HEAD
+2026.6.12.1
+=======
+2026.06.30.2
+>>>>>>> 83d904b (Release v2026.7.2.1))...
+[2026-07-02 11:02:27] 🔔 Phát hiện bản mới: v2026.7.2.1 → bắt đầu tải...
+[2026-07-02 11:02:27] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-02 11:02:27] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-02 11:02:27] 🎉 Hoàn tất cập nhật → phiên bản 2026.7.2.1
+[2026-07-03 15:39:45] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.2.1)...
+[2026-07-03 15:39:46] ✅ Đang dùng bản mới nhất.
+[2026-07-05 23:18:13] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.2.1)...
+[2026-07-05 23:18:13] ✅ Đang dùng bản mới nhất.
+[2026-07-06 08:13:33] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.2.1)...
+[2026-07-06 08:13:34] ✅ Đang dùng bản mới nhất.
+[2026-07-07 09:18:01] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.2.1)...
+[2026-07-07 09:18:01] ✅ Đang dùng bản mới nhất.
+[2026-07-07 11:12:45] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.2.1)...
+[2026-07-07 11:12:45] ✅ Đang dùng bản mới nhất.
+[2026-07-07 15:25:25] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.2.1)...
+[2026-07-07 15:25:26] ✅ Đang dùng bản mới nhất.
+[2026-07-08 15:04:08] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.2.1)...
+[2026-07-08 15:04:10] ✅ Đang dùng bản mới nhất.
+[2026-07-14 11:12:41] 🔍 Kiểm tra cập nhật (hiện tại: 2026.07.14.2)...
+[2026-07-14 11:12:41] ✅ Đang dùng bản mới nhất.
+[2026-07-14 11:16:09] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.4)...
+[2026-07-14 11:16:10] 🔔 Phát hiện bản mới: v2026.07.14.2 → bắt đầu tải...
+[2026-07-14 11:16:10] ⏬ Tải AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py
+[2026-07-14 11:16:10] ✅ Cập nhật thành công: AutoResetConn.py
+[2026-07-14 11:16:10] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-14 11:16:11] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-14 11:16:11] 🎉 Hoàn tất cập nhật → phiên bản 2026.07.14.2
+[2026-07-14 11:25:12] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.5)...
+[2026-07-14 11:25:12] ✅ Đang dùng bản mới nhất.
+[2026-07-14 11:28:32] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.6)...
+[2026-07-14 11:28:32] 🔔 Phát hiện bản mới: v2026.7.14.5 → bắt đầu tải...
+[2026-07-14 11:28:32] ⏬ Tải AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py
+[2026-07-14 11:28:33] ✅ Cập nhật thành công: AutoResetConn.py
+[2026-07-14 11:28:33] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-14 11:28:35] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-14 11:28:35] 🎉 Hoàn tất cập nhật → phiên bản 2026.7.14.5
+[2026-07-14 14:07:02] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.5)...
+[2026-07-14 14:07:03] 🔔 Phát hiện bản mới: v2026.7.14.6 → bắt đầu tải...
+[2026-07-14 14:07:03] ⏬ Tải AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py
+[2026-07-14 14:07:03] ✅ Cập nhật thành công: AutoResetConn.py
+[2026-07-14 14:07:03] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-14 14:07:04] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-14 14:07:04] 🎉 Hoàn tất cập nhật → phiên bản 2026.7.14.6
+[2026-07-14 14:10:16] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.7)...
+[2026-07-14 14:10:17] 🔔 Phát hiện bản mới: v2026.7.14.6 → bắt đầu tải...
+[2026-07-14 14:10:17] ⏬ Tải AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py
+[2026-07-14 14:10:17] ✅ Cập nhật thành công: AutoResetConn.py
+[2026-07-14 14:10:17] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-14 14:10:17] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-14 14:10:17] 🎉 Hoàn tất cập nhật → phiên bản 2026.7.14.6
+[2026-07-14 14:14:37] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.6)...
+[2026-07-14 14:14:37] 🔔 Phát hiện bản mới: v2026.7.14.7 → bắt đầu tải...
+[2026-07-14 14:14:37] ⏬ Tải AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py
+[2026-07-14 14:14:38] ✅ Cập nhật thành công: AutoResetConn.py
+[2026-07-14 14:14:38] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-14 14:14:38] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-14 14:14:38] 🎉 Hoàn tất cập nhật → phiên bản 2026.7.14.7
+[2026-07-14 14:17:41] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.8)...
+[2026-07-14 14:17:42] 🔔 Phát hiện bản mới: v2026.7.14.7 → bắt đầu tải...
+[2026-07-14 14:17:42] ⏬ Tải AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py
+[2026-07-14 14:17:42] ✅ Cập nhật thành công: AutoResetConn.py
+[2026-07-14 14:17:42] ⏬ Tải core/AutoResetConn.py từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py
+[2026-07-14 14:17:42] ✅ Cập nhật thành công: core/AutoResetConn.py
+[2026-07-14 14:17:42] 🎉 Hoàn tất cập nhật → phiên bản 2026.7.14.7
+[2026-07-14 14:17:42] 🔁 Khởi động lại để áp dụng cập nhật...
+[2026-07-14 14:18:17] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.9)...
+[2026-07-14 14:18:17] ✅ Đang dùng bản mới nhất.
+[2026-07-14 14:21:26] 🔍 Kiểm tra cập nhật (hiện tại: 2026.7.14.9)...
+[2026-07-14 14:21:26] ✅ Đang dùng bản mới nhất.

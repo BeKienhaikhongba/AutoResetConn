@@ -208,3 +208,7 @@ __marimo__/
 
 # AddChuKy build output
 AddChuKy/release/
+
+# Node modules
+node_modules/
+AddChuKy/node_modules/
