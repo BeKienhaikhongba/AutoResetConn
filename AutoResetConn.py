@@ -104,7 +104,6 @@ def log_update(msg):
     _buf(line)
 
 def download_and_replace(remote_ver, auto_restart=False):
-    global CURRENT_VERSION
     try:
         for rel, url in FILES_TO_UPDATE.items():
             dst = os.path.join(APP_DIR, rel)
@@ -121,26 +120,22 @@ def download_and_replace(remote_ver, auto_restart=False):
         with open(os.path.join(APP_DIR, "version_local.txt"), "w", encoding="utf-8") as f:
             f.write(remote_ver)
         log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}")
-        CURRENT_VERSION = remote_ver
 
         if auto_restart:
             log_update("🔁 Khởi động lại để áp dụng cập nhật...")
             time.sleep(1)
             os.execl(sys.executable, sys.executable, *sys.argv)
-        else:
-            if 'app' in globals() and app:
-                try:
-                    app.after(0, lambda: refresh_title_from_local_version(app))
-                    app.after(0, lambda: messagebox.showinfo(
-                        "Cập nhật hoàn tất",
-                        f"Đã tự động tải thành công phiên bản mới v{remote_ver}!\n\n"
-                        "👉 Vui lòng khởi động lại ứng dụng để áp dụng thay đổi."
-                    ))
-                except Exception:
-                    pass
 
     except Exception as e:
         log_update(f"❌ Lỗi khi cập nhật: {e}")
+
+def is_remote_newer(local_ver, remote_ver):
+    try:
+        local_parts = [int(p) for p in local_ver.split('.')]
+        remote_parts = [int(p) for p in remote_ver.split('.')]
+        return remote_parts > local_parts
+    except Exception:
+        return remote_ver != local_ver
 
 def check_for_update(auto_restart=False):
     try:
@@ -150,7 +145,7 @@ def check_for_update(auto_restart=False):
             log_update("⚠️ Không lấy được version từ server.")
             return
         remote_ver = r.text.strip()
-        if remote_ver == CURRENT_VERSION:
+        if not is_remote_newer(CURRENT_VERSION, remote_ver):
             log_update("✅ Đang dùng bản mới nhất.")
             return
         log_update(f"🔔 Phát hiện bản mới: v{remote_ver} → bắt đầu tải...")
@@ -158,25 +153,8 @@ def check_for_update(auto_restart=False):
     except Exception as e:
         log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}")
 
-# Gọi updater sớm (log sẽ buffer, UI lên sẽ flush) và tự động khởi động lại khi có cập nhật mới ở thời điểm khởi chạy
-check_for_update(auto_restart=True)
-
-def start_periodic_update_check():
-    def check_loop():
-        # Đợi 15 giây sau khi ứng dụng mở
-        time.sleep(15)
-        while True:
-            time.sleep(10 * 60)  # Kiểm tra mỗi 10 phút
-            try:
-                # Chỉ check/tải âm thầm nếu luồng auto reset đang không hoạt động
-                if not running:
-                    check_for_update(auto_restart=False)
-            except Exception:
-                pass
-    t = threading.Thread(target=check_loop, daemon=True)
-    t.start()
-
-start_periodic_update_check()
+# Gọi updater sớm (log sẽ buffer, UI lên sẽ flush)
+check_for_update(auto_restart=False)
 
 # ===================== ENCRYPTION =====================
 def load_or_create_key():
