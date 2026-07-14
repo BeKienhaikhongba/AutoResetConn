@@ -18,6 +18,22 @@ import requests
 import psycopg2
 from cryptography.fernet import Fernet
 
+# ===================== WIN32 API DECLARATIONS =====================
+if sys.platform.startswith('win'):
+    import ctypes
+    user32 = ctypes.windll.user32
+    GWL_STYLE = -16
+    WS_CHILD = 0x40000000
+    WS_CAPTION = 0x00C00000
+    WS_THICKFRAME = 0x00040000
+    WS_MINIMIZEBOX = 0x00020000
+    WS_MAXIMIZEBOX = 0x00010000
+    WS_SYSMENU = 0x00080000
+    SWP_NOZORDER = 0x0004
+    SWP_FRAMECHANGED = 0x0020
+else:
+    user32 = None
+
 
 # ===================== APP PATH & FILES =====================
 """
@@ -555,7 +571,78 @@ def stop_auto_reset():
     entry_interval.config(state="normal")
     combo_unit.config(state="readonly")
 
+electron_process = None
+electron_hwnd = None
+is_launching = False
+
+def find_hwnd_by_title(title_substring):
+    if not user32:
+        return None
+    hwnd_found = []
+    def enum_windows_callback(hwnd, lParam):
+        if user32.IsWindowVisible(hwnd):
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buf = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buf, length + 1)
+                if title_substring.lower() in buf.value.lower():
+                    hwnd_found.append(hwnd)
+                    return False
+        return True
+    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
+    return hwnd_found[0] if hwnd_found else None
+
+def resize_electron(event=None):
+    global electron_hwnd
+    if user32 and electron_hwnd:
+        try:
+            w = frame_embed.winfo_width()
+            h = frame_embed.winfo_height()
+            user32.MoveWindow(electron_hwnd, 0, 0, w, h, True)
+        except Exception:
+            pass
+
+def embed_electron_window(hwnd):
+    global lbl_loading, electron_hwnd
+    electron_hwnd = hwnd
+    try:
+        lbl_loading.pack_forget()
+    except Exception:
+        pass
+    
+    try:
+        # Xóa thanh tiêu đề và nút điều khiển
+        style = user32.GetWindowLongW(hwnd, GWL_STYLE)
+        style &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)
+        style |= WS_CHILD
+        user32.SetWindowLongW(hwnd, GWL_STYLE, style)
+        
+        # Nhúng vào frame_embed
+        parent_hwnd = frame_embed.winfo_id()
+        user32.SetParent(hwnd, parent_hwnd)
+        
+        # Thiết lập kích thước ban đầu
+        resize_electron()
+        user32.SetWindowPos(hwnd, 0, 0, 0, frame_embed.winfo_width(), frame_embed.winfo_height(), SWP_NOZORDER | SWP_FRAMECHANGED)
+    except Exception as e:
+        log_message(f"❌ Lỗi khi nhúng cửa sổ: {e}")
+
 def launch_signature_cropper():
+    global electron_process, electron_hwnd, is_launching
+    
+    try:
+        notebook.select(tab_signature)
+    except Exception:
+        pass
+
+    if electron_hwnd and user32 and user32.IsWindow(electron_hwnd):
+        resize_electron()
+        return
+
+    if is_launching:
+        return
+
     add_chuky_dir = os.path.join(APP_DIR, "AddChuKy")
     if not os.path.exists(add_chuky_dir):
         messagebox.showerror(
@@ -564,7 +651,14 @@ def launch_signature_cropper():
         )
         return
 
-    # Đường dẫn executable bản release
+    is_launching = True
+    
+    try:
+        lbl_loading.pack(pady=50)
+        lbl_loading.config(text="Đang khởi chạy Signature Cropper...")
+    except Exception:
+        pass
+
     exe_path = os.path.join(
         add_chuky_dir,
         "release",
@@ -572,22 +666,39 @@ def launch_signature_cropper():
         "Tool Cut Image.exe"
     )
 
-    if os.path.exists(exe_path):
-        log_message("🖋️ Khởi chạy Signature Cropper (bản đóng gói)...")
-        try:
-            subprocess.Popen([exe_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
-        except Exception as e:
-            messagebox.showerror("Lỗi khởi chạy", f"Không thể mở file exe:\n{e}")
-    else:
-        # Bản dev: Chạy bằng npm run electron:dev
-        log_message("🖋️ Khởi chạy Signature Cropper (bản dev)...")
-        try:
+    try:
+        if os.path.exists(exe_path):
+            log_message("🖋️ Khởi chạy Signature Cropper (bản đóng gói)...")
+            electron_process = subprocess.Popen([exe_path])
+        else:
+            log_message("🖋️ Khởi chạy Signature Cropper (bản dev)...")
             if sys.platform.startswith('win'):
-                subprocess.Popen("npm run electron:dev", shell=True, cwd=add_chuky_dir)
+                electron_process = subprocess.Popen("npm run electron:dev", shell=True, cwd=add_chuky_dir)
             else:
-                subprocess.Popen(["npm", "run", "electron:dev"], cwd=add_chuky_dir)
-        except Exception as e:
-            messagebox.showerror("Lỗi khởi chạy", f"Không thể khởi chạy qua npm:\n{e}\n\n👉 Hãy chắc chắn đã cài Node.js/npm.")
+                electron_process = subprocess.Popen(["npm", "run", "electron:dev"], cwd=add_chuky_dir)
+    except Exception as e:
+        is_launching = False
+        messagebox.showerror("Lỗi khởi chạy", f"Không thể khởi chạy:\n{e}")
+        return
+
+    def poll_hwnd(retries=0):
+        global electron_hwnd, is_launching
+        if retries > 60:
+            is_launching = False
+            try:
+                lbl_loading.config(text="⚠️ Khởi chạy quá giờ hoặc lỗi. Hãy thử chuyển lại tab.")
+            except Exception:
+                pass
+            return
+        
+        hwnd = find_hwnd_by_title("Signature Cropper")
+        if hwnd:
+            embed_electron_window(hwnd)
+            is_launching = False
+        else:
+            app.after(200, lambda: poll_hwnd(retries + 1))
+
+    app.after(500, poll_hwnd)
 
 # ===================== UI =====================
 def create_modern_button(parent, text, bg, hover_bg, command, fg="#ffffff", font_size=10, font_weight="bold"):
@@ -602,7 +713,7 @@ def create_modern_button(parent, text, bg, hover_bg, command, fg="#ffffff", font
 
 app = tk.Tk()
 app.title(f"Auto Reset DB Tool v{CURRENT_VERSION}")
-app.geometry("980x620")
+app.geometry("1200x800")
 app.configure(bg="#121214")
 
 # Icon cửa sổ (tuỳ chọn)
@@ -611,14 +722,55 @@ try:
 except Exception as e:
     print("⚠️ Không thể đặt icon:", e)
 
-# Cấu hình grid co giãn cho app chính
-app.columnconfigure(0, weight=1)
-app.columnconfigure(1, weight=1)
-app.rowconfigure(0, weight=1)
-app.rowconfigure(2, weight=1)
+# Cấu hình notebook
+style = ttk.Style()
+style.theme_use("default")
+style.configure("TNotebook", background="#121214", borderwidth=0)
+style.configure("TNotebook.Tab", 
+                background="#1a1a24", 
+                foreground="#a1a1aa", 
+                padding=[18, 6], 
+                font=("Segoe UI", 10, "bold"),
+                borderwidth=0)
+style.map("TNotebook.Tab",
+          background=[("selected", "#6366f1")],
+          foreground=[("selected", "#ffffff")])
+
+notebook = ttk.Notebook(app)
+notebook.pack(fill="both", expand=True)
+
+# Tab 1: Reset Connect
+tab_reset = tk.Frame(notebook, bg="#121214")
+notebook.add(tab_reset, text="Reset Connect")
+
+# Tab 2: Signature Cropper
+tab_signature = tk.Frame(notebook, bg="#121214")
+notebook.add(tab_signature, text="Signature Cropper")
+
+# Khung chứa nhúng cho Tab 2
+frame_embed = tk.Frame(tab_signature, bg="#121214")
+frame_embed.pack(fill="both", expand=True)
+frame_embed.bind("<Configure>", resize_electron)
+
+lbl_loading = tk.Label(frame_embed, text="Đang khởi chạy Signature Cropper...", fg="#6366f1", bg="#121214", font=("Segoe UI", 12, "bold"))
+
+# Lắng nghe sự kiện chuyển Tab
+def on_tab_changed(event):
+    selected_tab = notebook.select()
+    if notebook.index(selected_tab) == 1:
+        if not electron_hwnd:
+            launch_signature_cropper()
+
+notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
+
+# Cấu hình grid cho Tab Reset
+tab_reset.columnconfigure(0, weight=1)
+tab_reset.columnconfigure(1, weight=1)
+tab_reset.rowconfigure(0, weight=1)
+tab_reset.rowconfigure(2, weight=1)
 
 # LEFT FORM (CARD)
-frame_left = tk.Frame(app, bg="#1a1a24", padx=20, pady=15, highlightthickness=1, highlightbackground="#2d2d3a")
+frame_left = tk.Frame(tab_reset, bg="#1a1a24", padx=20, pady=15, highlightthickness=1, highlightbackground="#2d2d3a")
 frame_left.grid(row=0, column=0, padx=15, pady=15, sticky="nsew")
 
 # Row 0: Labels Host and Port
@@ -750,7 +902,7 @@ btn_signature = create_modern_button(frame_form_buttons, "🖋️ Signature Crop
 btn_signature.grid(row=3, column=0, columnspan=2, sticky="we", padx=4, pady=3, ipady=1)
 
 # RIGHT LIST (CARD)
-frame_right = tk.Frame(app, bg="#1a1a24", padx=25, pady=20, highlightthickness=1, highlightbackground="#2d2d3a")
+frame_right = tk.Frame(tab_reset, bg="#1a1a24", padx=25, pady=20, highlightthickness=1, highlightbackground="#2d2d3a")
 frame_right.grid(row=0, column=1, padx=15, pady=15, sticky="nsew")
 
 lbl_right_title = tk.Label(frame_right, text="Danh sách cấu hình:", bg="#1a1a24", fg="#f4f4f5", font=("Segoe UI", 11, "bold"), anchor="w")
@@ -784,17 +936,28 @@ def show_action_buttons():
     btn_delete.grid(row=0, column=2, padx=6)
 
 # LOG UI (TERMINAL LOG)
-lbl_log_title = tk.Label(app, text="Log hoạt động:", bg="#121214", fg="#f4f4f5", font=("Segoe UI", 11, "bold"), anchor="w")
+lbl_log_title = tk.Label(tab_reset, text="Log hoạt động:", bg="#121214", fg="#f4f4f5", font=("Segoe UI", 11, "bold"), anchor="w")
 lbl_log_title.grid(row=1, column=0, columnspan=2, padx=15, pady=(15, 5), sticky="w")
 
-log_area = scrolledtext.ScrolledText(app, width=120, height=8, bg="#09090b", fg="#22c55e", 
+log_area = scrolledtext.ScrolledText(tab_reset, width=120, height=8, bg="#09090b", fg="#22c55e", 
                                      insertbackground="#ffffff", font=("Consolas", 10), 
                                      relief="flat", highlightthickness=1, highlightbackground="#2d2d3a")
 log_area.grid(row=2, column=0, columnspan=2, padx=15, pady=(0, 15), sticky="nsew")
 
-log_menu = Menu(app, tearoff=0)
+log_menu = Menu(tab_reset, tearoff=0)
 log_menu.add_command(label="🧹 Xóa log hiển thị", command=clear_log_display)
 log_area.bind("<Button-3>", lambda e: log_menu.tk_popup(e.x_root, e.y_root))
+
+def on_app_close():
+    global electron_process
+    if electron_process:
+        try:
+            electron_process.terminate()
+        except Exception:
+            pass
+    app.destroy()
+
+app.protocol("WM_DELETE_WINDOW", on_app_close)
 
 # INIT
 load_config_cache()
