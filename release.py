@@ -16,7 +16,8 @@ VERSION_LOCAL_FILE = os.path.join(APP_DIR, "version_local.txt")
 
 def get_next_version():
     now = datetime.datetime.now()
-    today_str = f"{now.year}.{now.month}.{now.day}"
+    # mm: 1 ký tự (tháng 1-9), 2 ký tự (tháng 10-12). dd: luôn 2 ký tự (01-31)
+    today_str = f"{now.year}.{now.month}.{now.strftime('%d')}"
     
     # Phiên bản mặc định đầu tiên trong ngày
     next_ver = f"{today_str}.1"
