@@ -13,15 +13,33 @@ Author: BeKienhaikhongba
 import os, sys, json, time, threading, subprocess
 
 # ===================== EXE WRAPPER LOADER =====================
-# Nếu chạy từ file .exe đóng gói, tự động ưu tiên nạp và chạy code mới nhất từ file script trên đĩa.
-# Điều này giúp cơ chế tự động cập nhật hoạt động ngay lập tức mà không cần compile lại file .exe.
+# Nếu chạy từ file .exe đóng gói, tự động ưu tiên nạp và chạy code mới nhất từ file mã hóa hoặc script ngoài.
 if getattr(sys, "frozen", False) and not globals().get("_LAUNCHED_BY_EXE"):
     globals()["_LAUNCHED_BY_EXE"] = True
     app_dir = os.path.dirname(os.path.abspath(sys.executable))
-    external_script = os.path.join(app_dir, "AutoResetConn.py")
-    if os.path.exists(external_script):
+    
+    # 1. Ưu tiên nạp bản mã hóa bảo mật AutoResetConn.dat
+    dat_path = os.path.join(app_dir, "AutoResetConn.dat")
+    key_path = os.path.join(app_dir, "secret.key")
+    if os.path.exists(dat_path) and os.path.exists(key_path):
         try:
-            with open(external_script, "r", encoding="utf-8") as f:
+            with open(key_path, "rb") as f:
+                key = f.read()
+            from cryptography.fernet import Fernet
+            cipher = Fernet(key)
+            with open(dat_path, "rb") as f:
+                encrypted_data = f.read()
+            code = cipher.decrypt(encrypted_data).decode('utf-8')
+            exec(code, globals())
+            sys.exit(0)
+        except Exception as e:
+            print("⚠️ Lỗi nạp bản mã hóa, thử nạp bản raw:", e)
+
+    # 2. Dự phòng nạp bản raw nếu có (chỉ dùng cho dev)
+    py_path = os.path.join(app_dir, "AutoResetConn.py")
+    if os.path.exists(py_path):
+        try:
+            with open(py_path, "r", encoding="utf-8") as f:
                 code = f.read()
             exec(code, globals())
             sys.exit(0)
@@ -136,18 +154,52 @@ def log_update(msg):
     _buf(line)
 
 def download_and_replace(remote_ver, auto_restart=False):
+    global CURRENT_VERSION
     try:
-        for rel, url in FILES_TO_UPDATE.items():
-            dst = os.path.join(APP_DIR, rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            log_update(f"⏬ Tải {rel} từ {url}")
+        is_frozen = getattr(sys, "frozen", False)
+        
+        if is_frozen:
+            # Chạy từ file .exe -> chỉ tải AutoResetConn.py và lưu dưới dạng mã hóa AutoResetConn.dat
+            rel = "AutoResetConn.py"
+            url = FILES_TO_UPDATE[rel]
+            log_update(f"⏬ Tải {rel} (mã hóa bảo mật) từ {url}")
             r = requests.get(url, timeout=15)
-            if r.status_code != 200:
+            if r.status_code == 200:
+                # Mã hóa bằng key
+                key = None
+                key_path = os.path.join(APP_DIR, "secret.key")
+                if os.path.exists(key_path):
+                    with open(key_path, "rb") as f:
+                        key = f.read()
+                else:
+                    # Nếu chưa có key thì tạo mới
+                    key = Fernet.generate_key()
+                    with open(key_path, "wb") as f:
+                        f.write(key)
+                
+                if key:
+                    cipher = Fernet(key)
+                    encrypted_data = cipher.encrypt(r.text.encode('utf-8'))
+                    dat_path = os.path.join(APP_DIR, "AutoResetConn.dat")
+                    with open(dat_path, "wb") as f:
+                        f.write(encrypted_data)
+                    log_update("✅ Đã cập nhật bản mã hóa bảo mật: AutoResetConn.dat")
+            else:
                 log_update(f"❌ Không tải được {url} (status={r.status_code})")
-                continue
-            with open(dst, "w", encoding="utf-8") as f:
-                f.write(r.text)
-            log_update(f"✅ Cập nhật thành công: {rel}")
+                return
+        else:
+            # Chạy từ file script .py bình thường -> tải và ghi đè như cũ
+            for rel, url in FILES_TO_UPDATE.items():
+                dst = os.path.join(APP_DIR, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                log_update(f"⏬ Tải {rel} từ {url}")
+                r = requests.get(url, timeout=15)
+                if r.status_code != 200:
+                    log_update(f"❌ Không tải được {url} (status={r.status_code})")
+                    continue
+                with open(dst, "w", encoding="utf-8") as f:
+                    f.write(r.text)
+                log_update(f"✅ Cập nhật thành công: {rel}")
 
         with open(os.path.join(APP_DIR, "version_local.txt"), "w", encoding="utf-8") as f:
             f.write(remote_ver)
