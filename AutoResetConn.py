@@ -11,6 +11,22 @@ Author: BeKienhaikhongba
 """
 
 import os, sys, json, time, threading, subprocess
+
+# ===================== EXE WRAPPER LOADER =====================
+# Nếu chạy từ file .exe đóng gói, tự động ưu tiên nạp và chạy code mới nhất từ file script trên đĩa.
+# Điều này giúp cơ chế tự động cập nhật hoạt động ngay lập tức mà không cần compile lại file .exe.
+if getattr(sys, "frozen", False) and not globals().get("_LAUNCHED_BY_EXE"):
+    globals()["_LAUNCHED_BY_EXE"] = True
+    app_dir = os.path.dirname(os.path.abspath(sys.executable))
+    external_script = os.path.join(app_dir, "AutoResetConn.py")
+    if os.path.exists(external_script):
+        try:
+            with open(external_script, "r", encoding="utf-8") as f:
+                code = f.read()
+            exec(code, globals())
+            sys.exit(0)
+        except Exception as e:
+            print("⚠️ Lỗi nạp script ngoài, sử dụng bản build sẵn:", e)
 from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, Menu, Canvas, ttk
