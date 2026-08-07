@@ -440,8 +440,20 @@ def launch_signature_cropper():
     if is_launching:
         return
 
-    root_dir = os.path.dirname(APP_DIR)
-    add_chuky_dir = os.path.join(root_dir, "AddChuKy")
+    candidates = [
+        os.path.join(APP_DIR, "AddChuKy"),
+        os.path.join(os.path.dirname(APP_DIR), "AddChuKy"),
+    ]
+    if getattr(sys, "_MEIPASS", None):
+        candidates.append(os.path.join(sys._MEIPASS, "AddChuKy"))
+    add_chuky_dir = None
+    for cand in candidates:
+        if os.path.exists(cand):
+            add_chuky_dir = cand
+            break
+    if not add_chuky_dir:
+        add_chuky_dir = candidates[0]
+
     if not os.path.exists(add_chuky_dir):
         messagebox.showerror(
             "Không tìm thấy thư mục",
