@@ -53,6 +53,45 @@ def main():
             f.write(next_ver)
         with open(VERSION_LOCAL_FILE, "w", encoding="utf-8") as f:
             f.write(next_ver)
+        
+        # Cập nhật version_local.txt trong dist nếu có
+        dist_dir = os.path.join(APP_DIR, "dist")
+        if os.path.exists(dist_dir):
+            dist_ver_file = os.path.join(dist_dir, "version_local.txt")
+            with open(dist_ver_file, "w", encoding="utf-8") as f:
+                f.write(next_ver)
+                
+            # Mã hóa AutoResetConn.py thành AutoResetConn.dat trong dist/
+            py_path = os.path.join(APP_DIR, "AutoResetConn.py")
+            dat_path = os.path.join(dist_dir, "AutoResetConn.dat")
+            key_path = os.path.join(APP_DIR, "secret.key")
+            dist_key_path = os.path.join(dist_dir, "secret.key")
+            
+            if os.path.exists(py_path):
+                try:
+                    from cryptography.fernet import Fernet
+                    if os.path.exists(key_path):
+                        with open(key_path, "rb") as f:
+                            key = f.read()
+                    else:
+                        key = Fernet.generate_key()
+                        with open(key_path, "wb") as f:
+                            f.write(key)
+                    
+                    with open(dist_key_path, "wb") as f:
+                        f.write(key)
+
+                    with open(py_path, "r", encoding="utf-8") as f:
+                        code = f.read()
+
+                    cipher = Fernet(key)
+                    encrypted = cipher.encrypt(code.encode("utf-8"))
+                    with open(dat_path, "wb") as f:
+                        f.write(encrypted)
+                    print("🔒 Đã cập nhật bản mã hóa dist/AutoResetConn.dat")
+                except Exception as ex:
+                    print(f"⚠️ Không thể cập nhật AutoResetConn.dat: {ex}")
+
         print("✅ Đã cập nhật version.txt và version_local.txt")
     except Exception as e:
         print(f"❌ Lỗi ghi file version: {e}")
