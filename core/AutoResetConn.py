@@ -427,11 +427,6 @@ def embed_electron_window(hwnd):
 
 def launch_signature_cropper():
     global electron_process, electron_hwnd, is_launching
-    
-    try:
-        switch_tab(1)
-    except Exception:
-        pass
 
     if electron_hwnd and user32 and user32.IsWindow(electron_hwnd):
         resize_electron()
@@ -591,9 +586,9 @@ def switch_tab(tab_index):
         refresh_tab_headers(1)
         tab_reset.pack_forget()
         tab_signature.pack(fill="both", expand=True)
-        if not electron_hwnd:
+        if not electron_hwnd and not is_launching:
             launch_signature_cropper()
-        else:
+        elif electron_hwnd:
             resize_electron()
 
 # Gán sự kiện click cho các Tab button
@@ -738,7 +733,7 @@ btn_stop = create_modern_button(frame_form_buttons, "🛑 Dừng", "#27272a", "#
 btn_stop.grid(row=2, column=1, sticky="we", padx=4, pady=3, ipady=1)
 btn_stop.config(state="disabled", cursor="arrow")
 
-btn_signature = create_modern_button(frame_form_buttons, "🖋️ Signature Cropper", "#6366f1", "#4f46e5", launch_signature_cropper)
+btn_signature = create_modern_button(frame_form_buttons, "🖋️ Signature Cropper", "#6366f1", "#4f46e5", lambda: switch_tab(1))
 btn_signature.grid(row=3, column=0, columnspan=2, sticky="we", padx=4, pady=3, ipady=1)
 
 # RIGHT PANEL (CARD)
