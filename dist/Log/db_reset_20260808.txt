@@ -29,3 +29,18 @@
 [2026-08-08 21:22:25] 🏁 Hoàn tất reset [bvducgiang_public] (Thủ công) - Tổng: 1 | OK: 1 | Lỗi: 0
 
 [2026-08-08 21:22:38] 💡 Đã gợi ý tự động điền cấu hình [bvducgiang_public] sang tab Signature Cropper.
+[2026-08-08 21:35:34] 🖋️ Khởi chạy Signature Cropper (bản đóng gói)...
+[2026-08-08 21:36:27] ❌ Test connection failed: connection to server at "27.72.192.2", port 6688 failed: timeout expired
+
+[2026-08-08 21:36:29] ✅ Test connection OK.
+[2026-08-08 21:37:05] ✅ Test connection OK.
+[2026-08-08 21:37:05] 🟦 Bắt đầu reset cho server [ducgiang_pl]...
+[2026-08-08 21:37:08] ✅ [ducgiang_pl] Reset DB port 6688 thành công.
+[2026-08-08 21:37:08] 🏁 Hoàn tất reset [ducgiang_pl] (Thủ công) - Tổng: 1 | OK: 1 | Lỗi: 0
+
+[2026-08-08 21:37:22] 🟦 Bắt đầu reset cho server [ducgiang_pl]...
+[2026-08-08 21:37:23] ✅ [ducgiang_pl] Reset DB port 6688 thành công.
+[2026-08-08 21:37:23] 🏁 Hoàn tất reset [ducgiang_pl] (Thủ công) - Tổng: 1 | OK: 1 | Lỗi: 0
+
+[2026-08-08 21:39:57] ❌ Test connection failed: could not translate host name "localhost hoặc 192.168.x.x" to address: Name or service not known
+

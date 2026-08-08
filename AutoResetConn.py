@@ -661,10 +661,6 @@ def add_new_config():
 
 def on_select_config(cfg_name):
     global selected_label, last_selected_name
-    # Toggle ẩn/hiện & trả form về trạng thái tạo mới khi click lại cùng cấu hình
-    if last_selected_name == cfg_name:
-        clear_form()
-        return
 
     last_selected_name = cfg_name
     cfg = next((c for c in CONFIG_CACHE if c["name"] == cfg_name), None)
