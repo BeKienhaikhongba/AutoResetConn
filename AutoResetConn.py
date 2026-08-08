@@ -239,7 +239,7 @@ def is_remote_newer(local_ver, remote_ver):
         return remote_ver != local_ver
 
 def restart_app():
-    """Thực thi khởi động lại ứng dụng 100% ẩn cửa sổ terminal trên Windows (hỗ trợ cả .exe và .py script)"""
+    """Thực thi khởi động lại ứng dụng 100% ẩn cửa sổ terminal trên Windows"""
     try:
         if 'app' in globals() and app:
             try:
@@ -249,26 +249,18 @@ def restart_app():
 
         vbs_path = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
         bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
+
         creationflags = 0x08000000 if sys.platform.startswith('win') else 0
 
-        # Xóa biến môi trường _MEIPASS để PyInstaller giải nén thư mục tạm _MEI mới hoàn toàn cho tiến trình con (.exe)
-        env = os.environ.copy()
-        env.pop("_MEIPASS2", None)
-        env.pop("_MEIPASS", None)
-
         if getattr(sys, "frozen", False):
-            # Nếu đang chạy từ file AutoResetConn.exe bản đóng gói
             exe_path = sys.executable
-            subprocess.Popen([exe_path] + sys.argv[1:], cwd=APP_DIR, env=env, creationflags=creationflags)
+            subprocess.Popen([exe_path] + sys.argv[1:], cwd=APP_DIR, creationflags=creationflags)
         elif os.path.exists(vbs_path):
-            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, env=env, creationflags=creationflags)
+            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, creationflags=creationflags)
         elif os.path.exists(bat_path):
-            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, env=env, creationflags=creationflags)
+            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, creationflags=creationflags)
         else:
-            subprocess.Popen(
-                ["uv", "run", "--with", "requests", "--with", "psycopg2-binary", "--with", "cryptography", "AutoResetConn.py"],
-                cwd=APP_DIR, env=env, creationflags=creationflags
-            )
+            subprocess.Popen([sys.executable, os.path.join(APP_DIR, "AutoResetConn.py")], cwd=APP_DIR, creationflags=creationflags)
     except Exception as e:
         print("❌ Lỗi khi restart_app:", e)
     finally:
