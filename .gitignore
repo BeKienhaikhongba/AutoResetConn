@@ -217,6 +217,8 @@ AddChuKy/node_modules/
 db_config.json
 active_db_config.json
 secret.key
+Data/
+dist/Data/
 Settings/
 dist/Settings/
 dist/db_config.json

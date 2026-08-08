@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import datetime
 import subprocess
 import zipfile
@@ -143,7 +144,13 @@ def main():
         os.makedirs(dist_dir, exist_ok=True)
 
         dist_log_dir = os.path.join(dist_dir, "Log")
+        dist_data_dir = os.path.join(dist_dir, "Data")
         os.makedirs(dist_log_dir, exist_ok=True)
+        os.makedirs(dist_data_dir, exist_ok=True)
+
+        # Ghi file version.json trong Data/
+        with open(os.path.join(dist_data_dir, "version.json"), "w", encoding="utf-8") as f:
+            json.dump({"version": next_ver}, f, indent=2)
 
         py_path = os.path.join(APP_DIR, "AutoResetConn.py")
         dat_path = os.path.join(dist_dir, "AutoResetConn.dat")
@@ -194,6 +201,12 @@ def main():
                 except Exception:
                     pass
 
+        # Xóa thư mục Settings/ cũ nếu còn sót
+        old_settings = os.path.join(dist_dir, "Settings")
+        if os.path.exists(old_settings):
+            try: shutil.rmtree(old_settings)
+            except Exception: pass
+
         # Copy 2 file script khởi chạy Run_Tool.bat và Chay_Tool_An_Terminal.vbs vào bộ cài dist/
         src_bat = os.path.join(APP_DIR, "Run_Tool.bat")
         src_vbs = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
@@ -202,7 +215,7 @@ def main():
         if os.path.exists(src_vbs):
             shutil.copy(src_vbs, os.path.join(dist_dir, "Chay_Tool_An_Terminal.vbs"))
 
-        print("✅ Đã dọn dẹp các file rác/nhạy cảm & loại bỏ vĩnh viễn version_local.txt!")
+        print("✅ Đã dọn dẹp các file rác/nhạy cảm & chuẩn hóa cấu trúc thư mục Data/ và Log/!")
     except Exception as e:
         print(f"❌ Lỗi ghi file version: {e}")
         sys.exit(1)
@@ -213,7 +226,7 @@ def main():
     # 3. Chạy các lệnh Git Push (Bảo mật: Không bao giờ add db_config.json hay secret.key)
     print("\n📦 Đang tiến hành push bản build mới lên Git...")
     # Gỡ bỏ an toàn nếu lỡ staged file nhạy cảm hoặc file rác root
-    subprocess.run(["git", "rm", "--cached", "-f", "version_local.txt", "dist/version_local.txt", "dist/Log/version_local.txt", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json", "dist/AutoResetConn.py", "dist/version.txt", "dist/update_log.txt"], capture_output=True)
+    subprocess.run(["git", "rm", "-r", "--cached", "-f", "Settings", "dist/Settings", "Data", "dist/Data", "version_local.txt", "dist/version_local.txt", "dist/Log/version_local.txt", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json", "dist/AutoResetConn.py", "dist/version.txt", "dist/update_log.txt"], capture_output=True)
 
     commands = [
         ["git", "add", ".gitignore", "version.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md", "Run_Tool.bat", "Chay_Tool_An_Terminal.vbs"],

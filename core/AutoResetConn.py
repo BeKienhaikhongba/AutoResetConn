@@ -112,45 +112,53 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
-SETTINGS_DIR = os.path.join(APP_DIR, "Settings")
+DATA_DIR = os.path.join(APP_DIR, "Data")
 LOG_DIR = os.path.join(APP_DIR, "Log")
-CONFIG_FILE = os.path.join(SETTINGS_DIR, "db_config.json")
-SECRET_KEY_FILE = os.path.join(SETTINGS_DIR, "secret.key")
+CONFIG_FILE = os.path.join(DATA_DIR, "db_config.json")
+SECRET_KEY_FILE = os.path.join(DATA_DIR, "secret.key")
 UPDATE_LOG = os.path.join(LOG_DIR, "update_log.txt")
 
 # 🔧 Tự tạo các file/thư mục cần thiết tại nơi đặt .exe
 try:
-    if not os.path.exists(LOG_DIR):
-        os.makedirs(LOG_DIR)
-    if not os.path.exists(SETTINGS_DIR):
-        os.makedirs(SETTINGS_DIR)
+    os.makedirs(LOG_DIR, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
 
-    # Tự động di chuyển file cũ từ root sang Settings/ nếu có
-    old_cfg = os.path.join(APP_DIR, "db_config.json")
-    if os.path.exists(old_cfg) and not os.path.exists(CONFIG_FILE):
-        try:
-            import shutil
-            shutil.move(old_cfg, CONFIG_FILE)
-        except Exception:
-            pass
+    # Tự động di chuyển file cũ từ root hoặc Settings/ sang Data/ nếu có
+    import shutil
+    old_sources = [
+        os.path.join(APP_DIR, "db_config.json"),
+        os.path.join(APP_DIR, "Settings", "db_config.json")
+    ]
+    for old_src in old_sources:
+        if os.path.exists(old_src) and not os.path.exists(CONFIG_FILE):
+            try:
+                shutil.move(old_src, CONFIG_FILE)
+            except Exception:
+                pass
 
     if not os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump({"configs": []}, f, indent=2, ensure_ascii=False)
+
+    # Dọn dẹp tuyệt đối file version_local.txt rác nếu lỡ có
+    for vl_file in [os.path.join(APP_DIR, "version_local.txt"), os.path.join(LOG_DIR, "version_local.txt")]:
+        if os.path.exists(vl_file):
+            try: os.remove(vl_file)
+            except Exception: pass
 except Exception as e:
     messagebox.showerror(
         "Lỗi quyền truy cập",
-        f"Không thể tạo file/ thư mục cấu hình tại {APP_DIR}\n\nChi tiết: {e}\n"
+        f"Không thể tạo thư mục Data/Log tại {APP_DIR}\n\nChi tiết: {e}\n"
         "👉 Vui lòng chạy bằng quyền Administrator."
     )
     sys.exit(1)
 
-EMBEDDED_VERSION = "2026.8.09.2"
+EMBEDDED_VERSION = "2026.8.09.3"
 
 # ===================== AUTO-UPDATER =====================
 def get_current_version():
-    """Đọc version hiện tại từ Settings/version.json hoặc nhãn mã nguồn nhúng."""
-    v_file = os.path.join(SETTINGS_DIR, "version.json")
+    """Đọc version hiện tại từ Data/version.json hoặc nhãn mã nguồn nhúng."""
+    v_file = os.path.join(DATA_DIR, "version.json")
     try:
         if os.path.exists(v_file):
             with open(v_file, "r", encoding="utf-8") as f:
@@ -220,7 +228,7 @@ def download_and_replace(remote_ver, auto_restart=False):
                     f.write(r.text)
                 log_update(f"✅ Cập nhật thành công file: {rel}", is_ui=False, is_file=True)
 
-        v_file = os.path.join(SETTINGS_DIR, "version.json")
+        v_file = os.path.join(DATA_DIR, "version.json")
         try:
             with open(v_file, "w", encoding="utf-8") as f:
                 json.dump({"version": remote_ver}, f, indent=2)
