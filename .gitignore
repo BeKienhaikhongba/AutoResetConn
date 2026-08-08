@@ -212,3 +212,15 @@ AddChuKy/release/
 # Node modules
 node_modules/
 AddChuKy/node_modules/
+
+# Sensitive user data & credential files (Bảo mật tuyệt đối, không push lên Git)
+db_config.json
+active_db_config.json
+secret.key
+dist/db_config.json
+dist/active_db_config.json
+dist/secret.key
+dist/*.rar
+dist/*.zip
+RELEASE_NOTES.txt
+dist/RELEASE_NOTES.txt

@@ -185,11 +185,14 @@ def main():
     # 2. Tạo gói cài đặt nén Offline (.rar / .zip)
     create_offline_packages(next_ver)
 
-    # 3. Chạy các lệnh Git Push
+    # 3. Chạy các lệnh Git Push (Bảo mật: Không bao giờ add db_config.json hay secret.key)
     print("\n📦 Đang tiến hành push bản build mới lên Git...")
+    # Gỡ bỏ an toàn nếu lỡ staged file nhạy cảm
+    subprocess.run(["git", "rm", "--cached", "-f", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json"], capture_output=True)
+
     commands = [
-        ["git", "add", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md"],
-        ["git", "add", "-f", "dist/"],
+        ["git", "add", ".gitignore", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md"],
+        ["git", "add", "-f", "dist/AutoResetConn.exe", "dist/AutoResetConn.dat", "dist/version_local.txt"],
         ["git", "commit", "-m", f"Release v{next_ver}"],
         ["git", "push"]
     ]
