@@ -901,6 +901,73 @@ def hide_hover_popup_if_outside():
         except Exception:
             pass
 
+def sync_to_signature_cropper(cfg_name=None):
+    global last_selected_name
+    target_name = cfg_name if cfg_name else last_selected_name
+    if not target_name:
+        messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để gợi ý sang Signature Cropper.")
+        return
+
+    cfg = next((c for c in CONFIG_CACHE if c["name"] == target_name), None)
+    if not cfg:
+        return
+
+    active_cfg = {
+        "host": cfg["host"],
+        "port": cfg["port"],
+        "database": cfg["db"],
+        "user": cfg["user"],
+        "password": decrypt_password(cfg["password"])
+    }
+
+    # 1. Cập nhật active_config vào db_config.json
+    try:
+        full_data = {}
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                full_data = json.load(f)
+                if not isinstance(full_data, dict):
+                    full_data = {}
+        full_data["configs"] = CONFIG_CACHE
+        full_data["active_config"] = active_cfg
+        full_data["host"] = active_cfg["host"]
+        full_data["port"] = active_cfg["port"]
+        full_data["database"] = active_cfg["database"]
+        full_data["user"] = active_cfg["user"]
+        full_data["password"] = active_cfg["password"]
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(full_data, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+    # 2. Ghi active_db_config.json ở nhiều vị trí
+    import tempfile
+    cand_dirs = [
+        APP_DIR,
+        tempfile.gettempdir(),
+        os.path.join(APP_DIR, "AddChuKy"),
+        os.path.join(APP_DIR, "AddChuKy", "release", "Tool Cut Image-win32-x64"),
+        os.path.join(APP_DIR, "AddChuKy", "release", "Tool Cut Image-win32-x64", "resources", "app")
+    ]
+    for target_dir in cand_dirs:
+        try:
+            if os.path.exists(target_dir):
+                with open(os.path.join(target_dir, "active_db_config.json"), "w", encoding="utf-8") as f:
+                    json.dump(active_cfg, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    # 3. Gửi HTTP POST tới server.js
+    def _sync_http():
+        try:
+            requests.post("http://localhost:3001/api/active-config", json={"config": active_cfg}, timeout=3)
+        except Exception:
+            pass
+    threading.Thread(target=_sync_http, daemon=True).start()
+
+    log_message(f"💡 Đã đẩy thành công cấu hình [{target_name}] sang tab Signature Cropper.")
+    messagebox.showinfo("Thành công", f"Đã đẩy cấu hình [{target_name}] sang Signature Cropper thành công!\n\n👉 Bạn hãy sang tab Signature Cropper để bắt đầu đẩy chữ ký.")
+
 def show_hover_options_menu(event, cfg_name, lbl_widget):
     global hover_popup, hover_timer, hovered_cfg_name
     if hover_timer:
@@ -933,6 +1000,7 @@ def show_hover_options_menu(event, cfg_name, lbl_widget):
 
     menu_items = [
         ("▶ Sử dụng", lambda: on_select_config(cfg_name), "#3b82f6", "#60a5fa"),
+        ("💡 Gợi ý cấu hình", lambda: [on_select_config(cfg_name), sync_to_signature_cropper(cfg_name)], "#10b981", "#34d399"),
         ("📋 Tạo bản sao (Nhân bản)", lambda: clone_config(cfg_name), "#8b5cf6", "#a78bfa"),
         ("✏️ Sửa cấu hình", lambda: [on_select_config(cfg_name), toggle_edit_mode()], "#f59e0b", "#fbbf24"),
         ("❌ Xóa cấu hình", lambda: [on_select_config(cfg_name), delete_config()], "#ef4444", "#f87171"),
