@@ -21,41 +21,31 @@ if sys.platform.startswith('win'):
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # ===================== EXE WRAPPER LOADER =====================
-# Nếu chạy từ file .exe đóng gói, tự động ưu tiên nạp và chạy code mới nhất từ file mã hóa hoặc script ngoài.
+# Nếu chạy từ file .exe đóng gói, tự động ưu tiên nạp và chạy code mới nhất từ file mã hóa AutoResetConn.dat
 if getattr(sys, "frozen", False) and not globals().get("_LAUNCHED_BY_EXE"):
     globals()["_LAUNCHED_BY_EXE"] = True
     app_dir = os.path.dirname(os.path.abspath(sys.executable))
-    
-    # 1. Ưu tiên nạp bản mã hóa bảo mật AutoResetConn.dat hoặc AutoResetConn.dll
     dat_path = os.path.join(app_dir, "AutoResetConn.dat")
-    dll_path = os.path.join(app_dir, "AutoResetConn.dll")
-    payload_path = dat_path if os.path.exists(dat_path) else (dll_path if os.path.exists(dll_path) else None)
-    key_path = os.path.join(app_dir, "secret.key")
 
-    if payload_path and os.path.exists(key_path):
+    if os.path.exists(dat_path):
         try:
-            with open(key_path, "rb") as f:
-                key = f.read()
+            import base64
+            from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+            from cryptography.hazmat.primitives import hashes
             from cryptography.fernet import Fernet
-            cipher = Fernet(key)
-            with open(payload_path, "rb") as f:
+
+            salt = b'AutoResetConn_Core_Release_Salt_2026'
+            kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
+            rel_key = base64.urlsafe_b64encode(kdf.derive(b'AutoResetConn_Core_Release_Master_Key_2026'))
+            cipher = Fernet(rel_key)
+
+            with open(dat_path, "rb") as f:
                 encrypted_data = f.read()
             code = cipher.decrypt(encrypted_data).decode('utf-8')
             exec(code, globals())
             sys.exit(0)
         except Exception as e:
-            print("⚠️ Lỗi nạp bản mã hóa, thử nạp bản raw:", e)
-
-    # 2. Dự phòng nạp bản raw nếu có (chỉ dùng cho dev)
-    py_path = os.path.join(app_dir, "AutoResetConn.py")
-    if os.path.exists(py_path):
-        try:
-            with open(py_path, "r", encoding="utf-8") as f:
-                code = f.read()
-            exec(code, globals())
-            sys.exit(0)
-        except Exception as e:
-            print("⚠️ Lỗi nạp script ngoài, sử dụng bản build sẵn:", e)
+            print("⚠️ Lỗi nạp bản mã hóa:", e)
 from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, Menu, Canvas, ttk
@@ -153,17 +143,22 @@ except Exception as e:
     )
     sys.exit(1)
 
-EMBEDDED_VERSION = "2026.8.09.3"
+EMBEDDED_VERSION = "2026.8.09.5"
 
 # ===================== AUTO-UPDATER =====================
 def get_current_version():
-    """Đọc version hiện tại từ Data/version.json hoặc nhãn mã nguồn nhúng."""
+    """Đọc version hiện tại từ Data/version.json hoặc nhãn mã nguồn nhúng. Tự tạo file Data/version.json nếu chưa có."""
     v_file = os.path.join(DATA_DIR, "version.json")
     try:
         if os.path.exists(v_file):
             with open(v_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data.get("version", EMBEDDED_VERSION)
+        else:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(v_file, "w", encoding="utf-8") as f:
+                json.dump({"version": EMBEDDED_VERSION}, f, indent=2)
+            return EMBEDDED_VERSION
     except Exception:
         pass
     return EMBEDDED_VERSION

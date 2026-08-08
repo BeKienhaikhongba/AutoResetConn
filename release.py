@@ -158,23 +158,23 @@ def main():
         
         if os.path.exists(py_path):
             try:
+                import base64
+                from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+                from cryptography.hazmat.primitives import hashes
                 from cryptography.fernet import Fernet
-                if os.path.exists(key_path):
-                    with open(key_path, "rb") as f:
-                        key = f.read()
-                else:
-                    key = Fernet.generate_key()
-                    with open(key_path, "wb") as f:
-                        f.write(key)
-                
+
+                salt = b'AutoResetConn_Core_Release_Salt_2026'
+                kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
+                rel_key = base64.urlsafe_b64encode(kdf.derive(b'AutoResetConn_Core_Release_Master_Key_2026'))
+                cipher = Fernet(rel_key)
+
                 with open(py_path, "r", encoding="utf-8") as f:
                     code = f.read()
 
-                cipher = Fernet(key)
                 encrypted = cipher.encrypt(code.encode("utf-8"))
                 with open(dat_path, "wb") as f:
                     f.write(encrypted)
-                print("🔒 Đã cập nhật bản mã hóa dist/AutoResetConn.dat")
+                print("🔒 Đã cập nhật bản mã hóa dist/AutoResetConn.dat (PBKDF2)")
             except Exception as ex:
                 print(f"⚠️ Không thể cập nhật AutoResetConn.dat: {ex}")
 
