@@ -567,15 +567,34 @@ def load_config_cache():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                CONFIG_CACHE = json.load(f).get("configs", [])
+                data = json.load(f)
+                if isinstance(data, dict):
+                    CONFIG_CACHE = data.get("configs", [])
+                elif isinstance(data, list):
+                    CONFIG_CACHE = data
+                else:
+                    CONFIG_CACHE = []
         except Exception:
             CONFIG_CACHE = []
     else:
         CONFIG_CACHE = []
 
 def save_config_cache():
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump({"configs": CONFIG_CACHE}, f, indent=2, ensure_ascii=False)
+    try:
+        full_data = {}
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    full_data = json.load(f)
+                    if not isinstance(full_data, dict):
+                        full_data = {}
+            except Exception:
+                full_data = {}
+        full_data["configs"] = CONFIG_CACHE
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(full_data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        log_message(f"⚠️ Lỗi lưu danh sách cấu hình DB: {e}")
 
 def set_entry_state(readonly=True):
     state = "readonly" if readonly else "normal"
@@ -706,11 +725,31 @@ def on_select_config(cfg_name):
             "user": cfg["user"],
             "password": decrypt_password(cfg["password"])
         }
-        # Ghi file ở cả APP_DIR và tempdir hệ thống để AddChuKy đọc chắc chắn 100%
+        # 1. Cập nhật active_config vào db_config.json mà KHÔNG xóa mảng "configs"
+        try:
+            full_data = {}
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    full_data = json.load(f)
+                    if not isinstance(full_data, dict):
+                        full_data = {}
+            full_data["configs"] = CONFIG_CACHE
+            full_data["active_config"] = active_cfg
+            full_data["host"] = active_cfg["host"]
+            full_data["port"] = active_cfg["port"]
+            full_data["database"] = active_cfg["database"]
+            full_data["user"] = active_cfg["user"]
+            full_data["password"] = active_cfg["password"]
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(full_data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+        # 2. Ghi file active_db_config.json ở tempdir hệ thống cho Signature Cropper
         import tempfile
         for target_dir in [APP_DIR, tempfile.gettempdir()]:
             try:
-                with open(os.path.join(target_dir, "db_config.json"), "w", encoding="utf-8") as f:
+                with open(os.path.join(target_dir, "active_db_config.json"), "w", encoding="utf-8") as f:
                     json.dump(active_cfg, f, indent=2, ensure_ascii=False)
             except Exception:
                 pass
