@@ -44,3 +44,5 @@
 
 [2026-08-08 21:39:57] ❌ Test connection failed: could not translate host name "localhost hoặc 192.168.x.x" to address: Name or service not known
 
+[2026-08-08 21:50:36] ✅ Test connection OK.
+[2026-08-08 22:24:42] 🖋️ Khởi chạy Signature Cropper (bản đóng gói)...
