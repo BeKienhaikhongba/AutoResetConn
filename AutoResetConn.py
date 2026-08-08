@@ -331,6 +331,77 @@ def show_update_loading_window(remote_ver):
         log_update(f"❌ Lỗi mở cửa sổ loading: {e}", is_ui=True, is_file=True)
         download_and_replace(remote_ver, auto_restart=True)
 
+_PROMPTED_VERSIONS = set()
+
+def show_update_prompt_dialog(remote_ver):
+    """Mở hộp thoại Popup hiện đại thông báo có bản cập nhật mới ngay khi phát hiện bản mới trên Server"""
+    global _PROMPTED_VERSIONS
+    if remote_ver in _PROMPTED_VERSIONS:
+        return
+    _PROMPTED_VERSIONS.add(remote_ver)
+    
+    try:
+        if 'app' not in globals() or not app:
+            return
+
+        win = tk.Toplevel(app)
+        win.title("Thông báo cập nhật phần mềm")
+        win.geometry("480x210")
+        win.configure(bg="#18181b")
+        win.resizable(False, False)
+        win.transient(app)
+        win.grab_set()
+
+        win.update_idletasks()
+        try:
+            x = app.winfo_x() + (app.winfo_width() // 2) - 240
+            y = app.winfo_y() + (app.winfo_height() // 2) - 105
+            win.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+        lbl_icon = tk.Label(
+            win, text="🚀 PHÁT HIỆN BẢN CẬP NHẬT MỚI", 
+            fg="#10b981", bg="#18181b", font=("Segoe UI", 12, "bold")
+        )
+        lbl_icon.pack(pady=(18, 6))
+
+        lbl_msg = tk.Label(
+            win, 
+            text=f"Phiên bản v{remote_ver} mới nhất hiện đã có sẵn trên Server!\nBạn có muốn nâng cấp tự động và khởi động lại ngay không?",
+            fg="#f4f4f5", bg="#18181b", font=("Segoe UI", 9.5), justify="center", wraplength=440
+        )
+        lbl_msg.pack(pady=(0, 15))
+
+        frame_btns = tk.Frame(win, bg="#18181b")
+        frame_btns.pack(pady=5)
+
+        def on_accept():
+            win.destroy()
+            show_update_loading_window(remote_ver)
+
+        def on_later():
+            win.destroy()
+
+        btn_upgrade = tk.Button(
+            frame_btns, text="🚀 Nâng Cấp Ngay", bg="#6366f1", fg="#ffffff",
+            activebackground="#4f46e5", activeforeground="#ffffff",
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", padx=15, pady=5,
+            command=on_accept
+        )
+        btn_upgrade.pack(side="left", padx=10)
+
+        btn_later = tk.Button(
+            frame_btns, text="⏳ Để Sau", bg="#27272a", fg="#a1a1aa",
+            activebackground="#3f3f46", activeforeground="#ffffff",
+            relief="flat", font=("Segoe UI", 10), cursor="hand2", padx=15, pady=5,
+            command=on_later
+        )
+        btn_later.pack(side="left", padx=10)
+
+    except Exception as e:
+        log_update(f"⚠️ Lỗi hiển thị dialog cập nhật: {e}", is_ui=False, is_file=True)
+
 def check_for_update(auto_restart=False, is_startup=True):
     global NEW_VERSION_AVAILABLE
     try:
@@ -374,6 +445,7 @@ def check_for_update(auto_restart=False, is_startup=True):
                         command=lambda: show_update_loading_window(remote_ver)
                     )
                     btn_update_notify.pack(side="right", fill="y", padx=15)
+                show_update_prompt_dialog(remote_ver)
             except Exception:
                 pass
 
@@ -382,9 +454,6 @@ def check_for_update(auto_restart=False, is_startup=True):
 
     except Exception as e:
         log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}", is_ui=False, is_file=True)
-
-# Gọi updater sớm (log sẽ buffer, UI lên sẽ flush)
-check_for_update(auto_restart=False, is_startup=True)
 
 # ===================== ENCRYPTION =====================
 def load_or_create_key():
@@ -1390,4 +1459,20 @@ load_config_cache()
 refresh_data_list()
 flush_update_buffer_to_ui()
 refresh_title_from_local_version(app)
+
+# Tự động kiểm tra bản cập nhật mới trên server sau 1.5s khởi chạy UI
+if 'app' in globals() and app:
+    app.after(1500, lambda: check_for_update(auto_restart=False, is_startup=True))
+
+    def schedule_periodic_update_check():
+        try:
+            check_for_update(auto_restart=False, is_startup=False)
+        except Exception:
+            pass
+        finally:
+            if 'app' in globals() and app:
+                app.after(300000, schedule_periodic_update_check) # Lặp lại mỗi 5 phút khi app đang mở
+
+    app.after(300000, schedule_periodic_update_check)
+
 app.mainloop()
