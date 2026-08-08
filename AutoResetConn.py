@@ -458,11 +458,24 @@ def check_for_update(auto_restart=False, is_startup=True):
             log_update("✅ Đang dùng bản mới nhất.", is_ui=False, is_file=True)
             return
 
-        NEW_VERSION_AVAILABLE = remote_ver
-        log_update(f"🔔 Phát hiện bản mới trên server: v{remote_ver}", is_ui=True, is_file=True)
+        def show_navbar_update_button(v):
+            try:
+                if 'btn_update_notify' in globals() and btn_update_notify:
+                    btn_update_notify.config(
+                        text=f"⬇ Cập Nhật Phần Mềm ({v})",
+                        command=lambda: show_update_loading_window(v)
+                    )
+                    btn_update_notify.pack(side="right", fill="y", padx=15)
+            except Exception:
+                pass
 
         if 'app' in globals() and app:
-            app.after(0, lambda: show_update_prompt_dialog(remote_ver))
+            if is_startup:
+                # 1. Trường hợp mới mở phần mềm: Chỉ hiển thị nút đỏ Cập nhật trên Navbar (không tự nhảy Popup)
+                app.after(0, lambda: show_navbar_update_button(remote_ver))
+            else:
+                # 2. Trường hợp phần mềm đang chạy ngầm mà phát hiện bản mới: Mở cửa sổ Popup thông báo
+                app.after(0, lambda: show_update_prompt_dialog(remote_ver))
 
     except Exception as e:
         log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}", is_ui=False, is_file=True)
