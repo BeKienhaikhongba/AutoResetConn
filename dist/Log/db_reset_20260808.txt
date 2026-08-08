@@ -54,3 +54,4 @@
 [2026-08-08 22:40:50] ✅ [ducgiang_pl] Reset DB port 6688 thành công.
 [2026-08-08 22:40:50] 🏁 Hoàn tất reset [ducgiang_pl] (Thủ công) - Tổng: 1 | OK: 1 | Lỗi: 0
 
+[2026-08-08 22:48:50] 🖋️ Khởi chạy Signature Cropper (bản đóng gói)...
