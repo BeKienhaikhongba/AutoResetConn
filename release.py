@@ -163,9 +163,6 @@ def main():
                     with open(key_path, "wb") as f:
                         f.write(key)
                 
-                with open(dist_key_path, "wb") as f:
-                    f.write(key)
-
                 with open(py_path, "r", encoding="utf-8") as f:
                     code = f.read()
 
@@ -177,7 +174,37 @@ def main():
             except Exception as ex:
                 print(f"⚠️ Không thể cập nhật AutoResetConn.dat: {ex}")
 
-        print("✅ Đã cập nhật version.txt và version_local.txt")
+        # Dọn dẹp tuyệt đối các file nhạy cảm (mã nguồn .py, secret.key) không cho tồn tại dạng text trong dist/
+        dist_py = os.path.join(dist_dir, "AutoResetConn.py")
+        if os.path.exists(dist_py):
+            try: os.remove(dist_py)
+            except Exception: pass
+
+        dist_key = os.path.join(dist_dir, "secret.key")
+        if os.path.exists(dist_key):
+            try: os.remove(dist_key)
+            except Exception: pass
+
+        # Đảm bảo thư mục Log/ nằm gọn gàng trong dist/
+        dist_log_dir = os.path.join(dist_dir, "Log")
+        os.makedirs(dist_log_dir, exist_ok=True)
+        dist_update_log = os.path.join(dist_dir, "update_log.txt")
+        if os.path.exists(dist_update_log):
+            try:
+                import shutil
+                shutil.move(dist_update_log, os.path.join(dist_log_dir, "update_log.txt"))
+            except Exception: pass
+
+        # Copy 2 file script khởi chạy Run_Tool.bat và Chay_Tool_An_Terminal.vbs vào bộ cài dist/
+        import shutil
+        src_bat = os.path.join(APP_DIR, "Run_Tool.bat")
+        src_vbs = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
+        if os.path.exists(src_bat):
+            shutil.copy(src_bat, os.path.join(dist_dir, "Run_Tool.bat"))
+        if os.path.exists(src_vbs):
+            shutil.copy(src_vbs, os.path.join(dist_dir, "Chay_Tool_An_Terminal.vbs"))
+
+        print("✅ Đã dọn dẹp file nhạy cảm & nạp Run_Tool.bat, Chay_Tool_An_Terminal.vbs vào bộ cài dist/")
     except Exception as e:
         print(f"❌ Lỗi ghi file version: {e}")
         sys.exit(1)
@@ -188,11 +215,11 @@ def main():
     # 3. Chạy các lệnh Git Push (Bảo mật: Không bao giờ add db_config.json hay secret.key)
     print("\n📦 Đang tiến hành push bản build mới lên Git...")
     # Gỡ bỏ an toàn nếu lỡ staged file nhạy cảm
-    subprocess.run(["git", "rm", "--cached", "-f", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json"], capture_output=True)
+    subprocess.run(["git", "rm", "--cached", "-f", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json", "dist/AutoResetConn.py"], capture_output=True)
 
     commands = [
-        ["git", "add", ".gitignore", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md"],
-        ["git", "add", "-f", "dist/AutoResetConn.exe", "dist/AutoResetConn.dat", "dist/version_local.txt"],
+        ["git", "add", ".gitignore", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md", "Run_Tool.bat", "Chay_Tool_An_Terminal.vbs"],
+        ["git", "add", "-f", "dist/AutoResetConn.exe", "dist/AutoResetConn.dat", "dist/version_local.txt", "dist/Run_Tool.bat", "dist/Chay_Tool_An_Terminal.vbs"],
         ["git", "commit", "-m", f"Release v{next_ver}"],
         ["git", "push"]
     ]
