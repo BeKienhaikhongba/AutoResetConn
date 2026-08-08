@@ -1,25 +1,67 @@
 # -*- coding: utf-8 -*-
 """
-Auto Reset DB Tool - Core v4.9.1 (Dark Slate Modern)
+Auto Reset DB Tool + Auto-Updater (Full) v5.1
 - UI Tkinter quản lý cấu hình DB (lưu/ sửa/ xóa/ dùng)
-- Reset kết nối PostgreSQL thủ công / tự động theo thời gian tùy chọn
+- Reset kết nối PostgreSQL thủ công / tự động mỗi 1 giờ
 - Log ra file TXT theo ngày: Log/db_reset_YYYYMMDD.txt
 - Mã hóa password bằng Fernet (secret.key lưu trong thư mục app)
+- Auto-Updater: kiểm tra version trên GitHub, tải file core/... mới (nếu có)
+- Tự tạo thư mục Log, file cấu hình và secret.key nếu chưa có
+Author: BeKienhaikhongba
 """
 
-import tkinter as tk
-from tkinter import messagebox, scrolledtext, Menu, Canvas, ttk
-import json, os, sys, time, threading, subprocess
-from datetime import datetime
-import psycopg2
-from cryptography.fernet import Fernet
+import os, sys, json, time, threading, subprocess
 
+# Đảm bảo in unicode ra console Windows không bị lỗi
 if sys.platform.startswith('win'):
     import io
     if hasattr(sys.stdout, 'buffer'):
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     if hasattr(sys.stderr, 'buffer'):
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+# ===================== EXE WRAPPER LOADER =====================
+# Nếu chạy từ file .exe đóng gói, tự động ưu tiên nạp và chạy code mới nhất từ file mã hóa hoặc script ngoài.
+if getattr(sys, "frozen", False) and not globals().get("_LAUNCHED_BY_EXE"):
+    globals()["_LAUNCHED_BY_EXE"] = True
+    app_dir = os.path.dirname(os.path.abspath(sys.executable))
+    
+    # 1. Ưu tiên nạp bản mã hóa bảo mật AutoResetConn.dat hoặc AutoResetConn.dll
+    dat_path = os.path.join(app_dir, "AutoResetConn.dat")
+    dll_path = os.path.join(app_dir, "AutoResetConn.dll")
+    payload_path = dat_path if os.path.exists(dat_path) else (dll_path if os.path.exists(dll_path) else None)
+    key_path = os.path.join(app_dir, "secret.key")
+
+    if payload_path and os.path.exists(key_path):
+        try:
+            with open(key_path, "rb") as f:
+                key = f.read()
+            from cryptography.fernet import Fernet
+            cipher = Fernet(key)
+            with open(payload_path, "rb") as f:
+                encrypted_data = f.read()
+            code = cipher.decrypt(encrypted_data).decode('utf-8')
+            exec(code, globals())
+            sys.exit(0)
+        except Exception as e:
+            print("⚠️ Lỗi nạp bản mã hóa, thử nạp bản raw:", e)
+
+    # 2. Dự phòng nạp bản raw nếu có (chỉ dùng cho dev)
+    py_path = os.path.join(app_dir, "AutoResetConn.py")
+    if os.path.exists(py_path):
+        try:
+            with open(py_path, "r", encoding="utf-8") as f:
+                code = f.read()
+            exec(code, globals())
+            sys.exit(0)
+        except Exception as e:
+            print("⚠️ Lỗi nạp script ngoài, sử dụng bản build sẵn:", e)
+from datetime import datetime
+import tkinter as tk
+from tkinter import messagebox, scrolledtext, Menu, Canvas, ttk
+import requests
+import psycopg2
+from cryptography.fernet import Fernet
 
 # ===================== WIN32 API DECLARATIONS =====================
 if sys.platform.startswith('win'):
@@ -37,13 +79,450 @@ if sys.platform.startswith('win'):
 else:
     user32 = None
 
-# ===================== CONFIG =====================
-CONFIG_FILE = "db_config.json"
-LOG_DIR = "Log"
-SECRET_KEY_FILE = "secret.key"
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-SECRET_KEY_PATH = os.path.join(APP_DIR, SECRET_KEY_FILE)
 
+# ===================== APP PATH & FILES =====================
+"""
+APP_DIR = (
+    os.path.dirname(os.path.abspath(sys.executable))
+    if getattr(sys, "frozen", False)
+    else os.path.dirname(os.path.abspath(__file__))
+)
+CONFIG_FILE = os.path.join(APP_DIR, "db_config.json")
+LOG_DIR = os.path.join(APP_DIR, "Log")
+SECRET_KEY_FILE = os.path.join(APP_DIR, "secret.key")
+UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
+
+# Khởi tạo thư mục/ file cần thiết
+try:
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"configs": []}, f, indent=2, ensure_ascii=False)
+except PermissionError as e:
+    messagebox.showerror(
+        "Lỗi quyền truy cập",
+        f"Không thể ghi trong thư mục bộ cài:\n{APP_DIR}\n\nChi tiết: {e}\n"
+        "👉 Vui lòng chạy bằng quyền Administrator."
+    )
+    sys.exit(1)"""
+if getattr(sys, "frozen", False):
+    # Đang chạy file .exe -> trỏ tới thư mục chứa file .exe thật sự
+    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CONFIG_FILE = os.path.join(APP_DIR, "db_config.json")
+LOG_DIR = os.path.join(APP_DIR, "Log")
+SECRET_KEY_FILE = os.path.join(APP_DIR, "secret.key")
+UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
+
+# 🔧 Tự tạo các file/thư mục cần thiết tại nơi đặt .exe
+try:
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"configs": []}, f, indent=2, ensure_ascii=False)
+except Exception as e:
+    messagebox.showerror(
+        "Lỗi quyền truy cập",
+        f"Không thể tạo file/ thư mục cấu hình tại {APP_DIR}\n\nChi tiết: {e}\n"
+        "👉 Vui lòng chạy bằng quyền Administrator."
+    )
+    sys.exit(1)
+
+# ===================== AUTO-UPDATER =====================
+def get_current_version():
+    """Đọc version hiện tại từ file version_local.txt (hoặc mặc định nếu chưa có)."""
+    vf = os.path.join(APP_DIR, "version_local.txt")
+    try:
+        with open(vf, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "5.0.0"  # lần đầu chạy
+
+CURRENT_VERSION = get_current_version()
+VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/version.txt"
+# Tùy repo của bạn: nếu file bạn muốn cập nhật nằm ở core/AutoResetConn.py thì giữ như dưới
+FILES_TO_UPDATE = {
+    "AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py",
+    "core/AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py"
+}
+
+# Buffer log updater → sẽ đẩy vào UI sau khi UI sẵn sàng
+_UPDATE_UI_BUFFER = []
+def _buf(msg): _UPDATE_UI_BUFFER.append(msg)
+
+def log_update(msg, is_ui=True, is_file=True):
+    """
+    Tiêu chí ghi log:
+    - is_file=True: Ghi chi tiết đầy đủ (URLs, status, mã hóa, traceback) vào update_log.txt để tra cứu kỹ thuật.
+    - is_ui=True: Chỉ đẩy các thông điệp tóm tắt cần thiết lên màn hình ứng dụng.
+    """
+    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
+    if is_file:
+        try:
+            with open(UPDATE_LOG, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
+    if is_ui:
+        print(line)
+        _buf(line)
+
+def download_and_replace(remote_ver, auto_restart=False):
+    global CURRENT_VERSION
+    try:
+        is_frozen = getattr(sys, "frozen", False)
+        
+        if is_frozen:
+            # Chạy từ bản .exe đóng gói -> Tải trực tiếp file mã hóa AutoResetConn.dat bảo mật từ server
+            dat_url = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/dist/AutoResetConn.dat"
+            log_update("⏬ Tải bản cập nhật mã hóa bảo mật từ server...", is_ui=False, is_file=True)
+            r = requests.get(dat_url, timeout=15)
+            if r.status_code == 200:
+                dat_path = os.path.join(APP_DIR, "AutoResetConn.dat")
+                with open(dat_path, "wb") as f:
+                    f.write(r.content)
+                log_update("✅ Đã cập nhật thành công file mã hóa: AutoResetConn.dat", is_ui=False, is_file=True)
+            else:
+                log_update(f"❌ Không tải được bản cập nhật (status={r.status_code})", is_ui=True, is_file=True)
+                return
+        else:
+            for rel, url in FILES_TO_UPDATE.items():
+                dst = os.path.join(APP_DIR, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                log_update(f"⏬ Tải {rel} từ {url}", is_ui=False, is_file=True)
+                r = requests.get(url, timeout=15)
+                if r.status_code != 200:
+                    log_update(f"❌ Không tải được {url} (status={r.status_code})", is_ui=True, is_file=True)
+                    continue
+                with open(dst, "w", encoding="utf-8") as f:
+                    f.write(r.text)
+                log_update(f"✅ Cập nhật thành công file: {rel}", is_ui=False, is_file=True)
+
+        with open(os.path.join(APP_DIR, "version_local.txt"), "w", encoding="utf-8") as f:
+            f.write(remote_ver)
+        log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}", is_ui=True, is_file=True)
+        CURRENT_VERSION = remote_ver
+
+        if auto_restart:
+            log_update("🔁 Khởi động lại để áp dụng cập nhật...", is_ui=True, is_file=True)
+            time.sleep(0.1)
+            restart_app()
+
+    except Exception as e:
+        log_update(f"❌ Lỗi khi cập nhật: {e}", is_ui=True, is_file=True)
+
+NEW_VERSION_AVAILABLE = None
+
+def is_remote_newer(local_ver, remote_ver):
+    try:
+        local_parts = [int(p) for p in local_ver.split('.')]
+        remote_parts = [int(p) for p in remote_ver.split('.')]
+        return remote_parts > local_parts
+    except Exception:
+        return remote_ver != local_ver
+
+def restart_app():
+    """Thực thi khởi động lại ứng dụng 100% ẩn cửa sổ terminal trên Windows (hỗ trợ cả .exe và .py script)"""
+    try:
+        if 'app' in globals() and app:
+            try:
+                app.after(0, app.destroy)
+            except Exception:
+                pass
+
+        vbs_path = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
+        bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
+
+        # Xóa _MEIPASS2 trực tiếp từ Win32 OS C Environment Block để tiến trình con không kế thừa
+        try:
+            if sys.platform.startswith('win'):
+                import ctypes
+                ctypes.windll.kernel32.SetEnvironmentVariableW("_MEIPASS2", None)
+                ctypes.windll.kernel32.SetEnvironmentVariableW("_MEIPASS", None)
+        except Exception:
+            pass
+
+        env = os.environ.copy()
+        env.pop("_MEIPASS2", None)
+        env.pop("_MEIPASS", None)
+
+        if getattr(sys, "frozen", False):
+            # Nếu đang chạy từ file AutoResetConn.exe bản đóng gói single-file
+            exe_path = sys.executable
+            import tempfile
+            restart_bat = os.path.join(tempfile.gettempdir(), f"restart_tool_{os.getpid()}.bat")
+            with open(restart_bat, "w", encoding="utf-8") as f:
+                f.write(f'@echo off\ntimeout /t 2 /nobreak > nul\nexplorer.exe "{exe_path}"\ndel "%~f0"\n')
+            # 0x08000008 = CREATE_NO_WINDOW (0x08000000) | DETACHED_PROCESS (0x00000008)
+            subprocess.Popen(["cmd.exe", "/c", restart_bat], cwd=APP_DIR, creationflags=0x08000008, close_fds=True)
+        elif os.path.exists(vbs_path):
+            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, env=env, creationflags=0x08000000)
+        elif os.path.exists(bat_path):
+            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, env=env, creationflags=0x08000000)
+        else:
+            subprocess.Popen(
+                ["uv", "run", "--with", "requests", "--with", "psycopg2-binary", "--with", "cryptography", "AutoResetConn.py"],
+                cwd=APP_DIR, env=env, creationflags=0x08000000
+            )
+    except Exception as e:
+        print("❌ Lỗi khi restart_app:", e)
+    finally:
+        time.sleep(0.1)
+        os._exit(0)
+
+def show_update_loading_window(remote_ver):
+    """Tạo cửa sổ Loading hiện đại thông báo đang tải bản mới, tự động khởi động lại ngay khi hoàn tất."""
+    try:
+        win = tk.Toplevel(app)
+        win.title("Đang cập nhật phần mềm")
+        win.geometry("460x170")
+        win.configure(bg="#18181b")
+        win.resizable(False, False)
+        win.transient(app)
+        win.grab_set()
+
+        win.update_idletasks()
+        try:
+            x = app.winfo_x() + (app.winfo_width() // 2) - 230
+            y = app.winfo_y() + (app.winfo_height() // 2) - 85
+            win.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+        lbl_title = tk.Label(
+            win, 
+            text=f"🔄 ĐANG TẢI BẢN CẬP NHẬT (v{remote_ver})", 
+            fg="#6366f1", bg="#18181b", 
+            font=("Segoe UI", 11, "bold")
+        )
+        lbl_title.pack(pady=(22, 8))
+
+        lbl_status = tk.Label(
+            win, 
+            text="⏳ Đang tải dữ liệu bản mới từ server... Vui lòng chờ.", 
+            fg="#f4f4f5", bg="#18181b", 
+            font=("Segoe UI", 9)
+        )
+        lbl_status.pack(pady=4)
+
+        lbl_sub = tk.Label(
+            win, 
+            text="⚡ Ứng dụng sẽ tự động khởi động lại ngay sau khi tải xong.", 
+            fg="#71717a", bg="#18181b", 
+            font=("Segoe UI", 8, "italic")
+        )
+        lbl_sub.pack(pady=4)
+
+        def run_download_task():
+            try:
+                log_update(f"⏬ Bắt đầu tải bản cập nhật v{remote_ver}...", is_ui=False, is_file=True)
+                download_and_replace(remote_ver, auto_restart=False)
+                win.after(10, restart_app)
+            except Exception as ex:
+                log_update(f"❌ Lỗi tải bản cập nhật: {ex}", is_ui=True, is_file=True)
+                win.after(10, restart_app)
+
+        threading.Thread(target=run_download_task, daemon=True).start()
+    except Exception as e:
+        log_update(f"❌ Lỗi mở cửa sổ loading: {e}", is_ui=True, is_file=True)
+        download_and_replace(remote_ver, auto_restart=True)
+
+_PROMPTED_VERSIONS = set()
+
+def show_update_prompt_dialog(remote_ver):
+    """Mở hộp thoại Popup hiện đại thông báo có bản cập nhật mới ngay khi phát hiện bản mới trên Server"""
+    global _PROMPTED_VERSIONS
+    if remote_ver in _PROMPTED_VERSIONS:
+        return
+    _PROMPTED_VERSIONS.add(remote_ver)
+    
+    try:
+        if 'app' not in globals() or not app:
+            return
+
+        # Ẩn nút Navbar (1) trong khi Popup (2) đang hiển thị
+        if 'btn_update_notify' in globals() and btn_update_notify:
+            btn_update_notify.pack_forget()
+
+        win = tk.Toplevel(app)
+        win.title("Thông báo cập nhật phần mềm")
+        win.geometry("520x270")
+        win.configure(bg="#18181b")
+        win.resizable(False, False)
+        win.transient(app)
+        win.grab_set()
+
+        win.update_idletasks()
+        try:
+            x = app.winfo_x() + (app.winfo_width() // 2) - 260
+            y = app.winfo_y() + (app.winfo_height() // 2) - 135
+            win.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+        lbl_icon = tk.Label(
+            win, text="🚀 PHÁT HIỆN BẢN CẬP NHẬT MỚI", 
+            fg="#10b981", bg="#18181b", font=("Segoe UI", 13, "bold")
+        )
+        lbl_icon.pack(pady=(22, 10))
+
+        lbl_msg = tk.Label(
+            win, 
+            text=f"Phiên bản v{remote_ver} mới nhất hiện đã có sẵn trên Server!\nBạn có muốn tiến hành nâng cấp tự động và khởi động lại ngay không?",
+            fg="#f4f4f5", bg="#18181b", font=("Segoe UI", 10), justify="center", wraplength=460
+        )
+        lbl_msg.pack(pady=(0, 20))
+
+        frame_btns = tk.Frame(win, bg="#18181b")
+        frame_btns.pack(pady=10)
+
+        def show_navbar_btn():
+            try:
+                if 'btn_update_notify' in globals() and btn_update_notify:
+                    btn_update_notify.config(
+                        text=f"⬇ Cập Nhật Phần Mềm ({remote_ver})",
+                        command=lambda: show_update_loading_window(remote_ver)
+                    )
+                    btn_update_notify.pack(side="right", fill="y", padx=15)
+            except Exception:
+                pass
+
+        def on_accept():
+            try:
+                win.destroy()
+            except Exception:
+                pass
+            show_update_loading_window(remote_ver)
+
+        def on_later():
+            try:
+                win.destroy()
+            except Exception:
+                pass
+            show_navbar_btn()
+
+        win.protocol("WM_DELETE_WINDOW", on_later)
+
+        btn_upgrade = tk.Button(
+            frame_btns, text="🚀 Nâng Cấp Ngay", bg="#6366f1", fg="#ffffff",
+            activebackground="#4f46e5", activeforeground="#ffffff",
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", padx=20, pady=7,
+            command=on_accept
+        )
+        btn_upgrade.pack(side="left", padx=15)
+
+        btn_later = tk.Button(
+            frame_btns, text="⏳ Để Sau", bg="#27272a", fg="#a1a1aa",
+            activebackground="#3f3f46", activeforeground="#ffffff",
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", padx=20, pady=7,
+            command=on_later
+        )
+        btn_later.pack(side="left", padx=15)
+
+    except Exception as e:
+        log_update(f"⚠️ Lỗi hiển thị dialog cập nhật: {e}", is_ui=False, is_file=True)
+
+def check_for_update(auto_restart=False, is_startup=True):
+    global NEW_VERSION_AVAILABLE
+    try:
+        log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...", is_ui=False, is_file=True)
+        remote_ver = None
+        
+        # 1. Ưu tiên dùng GitHub API để lấy version tức thì (bỏ qua CDN Cache 10 phút của raw URL)
+        try:
+            api_url = "https://api.github.com/repos/BeKienhaikhongba/AutoResetConn/contents/version.txt"
+            r = requests.get(api_url, headers={"Cache-Control": "no-cache", "User-Agent": "AutoResetConnApp"}, timeout=5)
+            if r.status_code == 200:
+                import base64
+                content = r.json().get("content", "")
+                remote_ver = base64.b64decode(content).decode("utf-8").strip()
+        except Exception as ex_api:
+            log_update(f"⚠️ Lỗi GitHub API, dùng fallback Raw URL: {ex_api}", is_ui=False, is_file=True)
+
+        # 2. Fallback nếu API bị nghẽn
+        if not remote_ver:
+            req_url = f"{VERSION_URL}?t={int(time.time())}"
+            r = requests.get(req_url, headers={"Cache-Control": "no-cache"}, timeout=7)
+            if r.status_code == 200:
+                remote_ver = r.text.strip()
+
+        if not remote_ver:
+            log_update("⚠️ Không lấy được version từ server.", is_ui=False, is_file=True)
+            return
+
+        if not is_remote_newer(CURRENT_VERSION, remote_ver):
+            log_update("✅ Đang dùng bản mới nhất.", is_ui=False, is_file=True)
+            return
+
+        def show_navbar_update_button(v):
+            try:
+                if 'btn_update_notify' in globals() and btn_update_notify:
+                    btn_update_notify.config(
+                        text=f"⬇ Cập Nhật Phần Mềm ({v})",
+                        command=lambda: show_update_loading_window(v)
+                    )
+                    btn_update_notify.pack(side="right", fill="y", padx=15)
+            except Exception:
+                pass
+
+        if 'app' in globals() and app:
+            if is_startup:
+                # 1. Trường hợp mới mở phần mềm: Chỉ hiển thị nút đỏ Cập nhật trên Navbar (không tự nhảy Popup)
+                app.after(0, lambda: show_navbar_update_button(remote_ver))
+            else:
+                # 2. Trường hợp phần mềm đang chạy ngầm mà phát hiện bản mới: Mở cửa sổ Popup thông báo
+                app.after(0, lambda: show_update_prompt_dialog(remote_ver))
+
+    except Exception as e:
+        log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}", is_ui=False, is_file=True)
+
+# ===================== ENCRYPTION =====================
+def load_or_create_key():
+    try:
+        if not os.path.exists(SECRET_KEY_FILE):
+            key = Fernet.generate_key()
+            with open(SECRET_KEY_FILE, "wb") as f:
+                f.write(key)
+        else:
+            with open(SECRET_KEY_FILE, "rb") as f:
+                key = f.read()
+        return Fernet(key)
+    except Exception as e:
+        messagebox.showerror("Lỗi tạo key", str(e))
+        sys.exit(1)
+
+fernet = load_or_create_key()
+
+def encrypt_val(val):
+    if not val:
+        return ""
+    val_str = str(val).strip()
+    if val_str.startswith("gAAAAA"):
+        return val_str
+    try:
+        return fernet.encrypt(val_str.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return val_str
+
+def decrypt_val(val):
+    if not val:
+        return ""
+    val_str = str(val).strip()
+    if not val_str.startswith("gAAAAA"):
+        return val_str
+    try:
+        return fernet.decrypt(val_str.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return val_str
+
+def encrypt_password(p): return encrypt_val(p)
+def decrypt_password(p): return decrypt_val(p)
+
+# ===================== GLOBAL STATE =====================
 running = False
 reset_thread = None
 CONFIG_CACHE = []
@@ -51,47 +530,57 @@ edit_mode = False
 selected_label = None
 last_selected_name = ""
 
-# ===================== ENCRYPTION =====================
-def load_or_create_key():
-    try:
-        if not os.path.exists(SECRET_KEY_PATH):
-            key = Fernet.generate_key()
-            with open(SECRET_KEY_PATH, "wb") as f: f.write(key)
-        else:
-            with open(SECRET_KEY_PATH, "rb") as f: key = f.read()
-        return Fernet(key)
-    except Exception as e:
-        messagebox.showerror("Lỗi tạo key", str(e))
-        raise SystemExit
+# ===================== LOGGING (TXT/ngày) =====================
+def _log_file_today():
+    return os.path.join(LOG_DIR, f"db_reset_{datetime.now():%Y%m%d}.txt")
 
-fernet = load_or_create_key()
-def encrypt_password(p): return fernet.encrypt(p.encode()).decode()
-def decrypt_password(p):
-    try: return fernet.decrypt(p.encode()).decode()
-    except: return "•••••"
-
-# ===================== LOGGING =====================
-def get_log_file():
-    today = datetime.now().strftime("%Y%m%d")
-    log_dir = os.path.join(APP_DIR, LOG_DIR)
-    if not os.path.exists(log_dir): os.makedirs(log_dir)
-    return os.path.join(log_dir, f"db_reset_{today}.txt")
-
-def log_message(msg):
-    try:
-        log_area.insert(tk.END, msg + "\n")
-        log_area.yview(tk.END)
-    except Exception:
-        pass
-    try:
-        with open(get_log_file(), "a", encoding="utf-8") as f:
-            f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}\n")
-    except Exception:
-        pass
+def log_message(msg, is_ui=True, is_file=True):
+    """
+    Tiêu chí ghi log:
+    - is_file=True: Ghi log chi tiết (SQL query, connection details, traceback) vào file đĩa ngày.
+    - is_ui=True: Chỉ hiển thị các thông điệp tóm tắt cần thiết trên màn hình phần mềm.
+    """
+    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
+    if is_ui:
+        try:
+            log_area.insert(tk.END, line + "\n")
+            log_area.yview(tk.END)
+        except Exception:
+            pass
+    if is_file:
+        try:
+            with open(_log_file_today(), "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
 
 def clear_log_display():
     log_area.delete(1.0, tk.END)
     log_message("🧹 Log hiển thị đã được làm mới (file log vẫn giữ nguyên).")
+
+def flush_update_buffer_to_ui():
+    if _UPDATE_UI_BUFFER:
+        for line in _UPDATE_UI_BUFFER:
+            log_message(f"[AutoUpdate] {line}")
+        _UPDATE_UI_BUFFER.clear()
+
+    if NEW_VERSION_AVAILABLE and 'btn_update_notify' in globals() and btn_update_notify:
+        try:
+            btn_update_notify.config(
+                text=f"⬇ Cập Nhật Phần Mềm ({NEW_VERSION_AVAILABLE})",
+                command=lambda: show_update_loading_window(NEW_VERSION_AVAILABLE)
+            )
+            btn_update_notify.pack(side="right", fill="y", padx=15)
+        except Exception:
+            pass
+
+def refresh_title_from_local_version(app):
+    """Sau khi UI sẵn sàng, đọc lại version_local để set title đúng (nếu vừa update)."""
+    try:
+        v2 = get_current_version()
+        app.title(f"Auto Reset DB Tool v{v2}")
+    except Exception:
+        pass
 
 # ===================== CONFIG MANAGEMENT =====================
 def load_config_cache():
@@ -99,15 +588,94 @@ def load_config_cache():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                CONFIG_CACHE = json.load(f).get("configs", [])
+                data = json.load(f)
+                if isinstance(data, dict):
+                    raw_list = data.get("configs", [])
+                elif isinstance(data, list):
+                    raw_list = data
+                else:
+                    raw_list = []
+                
+                CONFIG_CACHE = []
+                for item in raw_list:
+                    if isinstance(item, dict):
+                        c = dict(item)
+                        c["host"] = decrypt_val(c.get("host", ""))
+                        c["port"] = decrypt_val(c.get("port", ""))
+                        c["db"] = decrypt_val(c.get("db", ""))
+                        c["user"] = decrypt_val(c.get("user", ""))
+                        c["password"] = decrypt_val(c.get("password", ""))
+                        CONFIG_CACHE.append(c)
         except Exception:
             CONFIG_CACHE = []
     else:
         CONFIG_CACHE = []
+    
+    # Ghi lại bản mã hóa 100% chuẩn trên đĩa & bản tạm trong Temp ngay khi mở ứng dụng
+    save_config_cache()
 
 def save_config_cache():
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump({"configs": CONFIG_CACHE}, f, indent=2, ensure_ascii=False)
+    try:
+        encrypted_configs_for_file = []
+        decrypted_configs_for_temp = []
+
+        for c in CONFIG_CACHE:
+            host_dec = decrypt_val(c.get("host", ""))
+            port_dec = decrypt_val(c.get("port", ""))
+            db_dec = decrypt_val(c.get("db", ""))
+            user_dec = decrypt_val(c.get("user", ""))
+            pass_dec = decrypt_val(c.get("password", ""))
+
+            enc_item = {
+                "name": c.get("name", ""),
+                "host": encrypt_val(host_dec),
+                "port": encrypt_val(port_dec),
+                "db": encrypt_val(db_dec),
+                "user": encrypt_val(user_dec),
+                "password": encrypt_val(pass_dec),
+                "interval_val": c.get("interval_val", "1"),
+                "interval_unit": c.get("interval_unit", "Giờ"),
+                "created": c.get("created", "")
+            }
+            encrypted_configs_for_file.append(enc_item)
+
+            dec_item = {
+                "name": c.get("name", ""),
+                "host": host_dec,
+                "port": port_dec,
+                "db": db_dec,
+                "user": user_dec,
+                "password": pass_dec,
+                "plain_password": pass_dec,
+                "interval_val": c.get("interval_val", "1"),
+                "interval_unit": c.get("interval_unit", "Giờ"),
+                "created": c.get("created", "")
+            }
+            decrypted_configs_for_temp.append(dec_item)
+
+        # Ghi file db_config.json chính thức: Chỉ giữ "name" dạng chữ, còn lại mã hóa 100%!
+        full_data = {"configs": encrypted_configs_for_file}
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(full_data, f, indent=2, ensure_ascii=False)
+
+        # Ghi file tạm giải mã riêng trong %TEMP% cho Signature Cropper đọc cục bộ
+        import tempfile
+        temp_data = {"configs": decrypted_configs_for_temp}
+        cand_dirs = [
+            tempfile.gettempdir(),
+            os.path.join(APP_DIR, "AddChuKy"),
+            os.path.join(APP_DIR, "AddChuKy", "release", "Tool Cut Image-win32-x64"),
+            os.path.join(APP_DIR, "AddChuKy", "release", "Tool Cut Image-win32-x64", "resources", "app")
+        ]
+        for target_dir in cand_dirs:
+            try:
+                if os.path.exists(target_dir):
+                    with open(os.path.join(target_dir, "db_config.json"), "w", encoding="utf-8") as f:
+                        json.dump(temp_data, f, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
+    except Exception as e:
+        log_message(f"⚠️ Lỗi lưu danh sách cấu hình DB: {e}")
 
 def set_entry_state(readonly=True):
     state = "readonly" if readonly else "normal"
@@ -153,15 +721,17 @@ def clear_form():
     last_selected_name = ""
     edit_mode = False
     btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
-    btn_save.config(state="normal")
+    btn_save.config(state="normal", command=add_new_config)
     hide_action_buttons()
 
 def add_new_config():
     name = entry_server.get().strip()
     if not name or entry_server.cget("fg") == "#a1a1aa":
-        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên Server."); return
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên Server.")
+        return
     if any(c["name"].lower() == name.lower() for c in CONFIG_CACHE):
-        messagebox.showerror("Trùng tên", f"Cấu hình '{name}' đã tồn tại!"); return
+        messagebox.showerror("Trùng tên", f"Cấu hình '{name}' đã tồn tại!")
+        return
     required = [
         entry_host.get().strip() if entry_host.cget("fg") != "#a1a1aa" else "",
         entry_port.get().strip() if entry_port.cget("fg") != "#a1a1aa" else "",
@@ -169,7 +739,9 @@ def add_new_config():
         entry_user.get().strip()
     ]
     if any(v == "" for v in required):
-        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ Host, Port, DB, User."); return
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ Host, Port, DB, User.")
+        return
+
     cfg = {
         "name": name,
         "host": entry_host.get(),
@@ -184,27 +756,25 @@ def add_new_config():
     CONFIG_CACHE.append(cfg)
     save_config_cache()
     refresh_data_list()
+    clear_form()
     messagebox.showinfo("Thành công", f"Đã thêm cấu hình '{name}'.")
 
 def on_select_config(cfg_name):
     global selected_label, last_selected_name
-    if last_selected_name == cfg_name:
-        hide_action_buttons()
-        last_selected_name = ""
-        selected_config.set("")
-        if selected_label and selected_label.winfo_exists():
-            selected_label.config(bg="#27272a", fg="#f4f4f5")
-        btn_save.config(state="normal")
-        return
 
     last_selected_name = cfg_name
     cfg = next((c for c in CONFIG_CACHE if c["name"] == cfg_name), None)
-    if not cfg: return
+    if not cfg:
+        return
 
+    # highlight
     for w in scroll_frame.winfo_children(): w.config(bg="#27272a", fg="#f4f4f5")
-    selected_label = [w for w in scroll_frame.winfo_children() if w.cget("text") == cfg_name][0]
-    selected_label.config(bg="#4f46e5", fg="#ffffff")
+    matching = [w for w in scroll_frame.winfo_children() if w.cget("text") == cfg_name]
+    if matching:
+        selected_label = matching[0]
+        selected_label.config(bg="#4f46e5", fg="#ffffff")
 
+    # mở khóa tạm để điền dữ liệu
     set_entry_state(False)
     for e in (entry_host, entry_port, entry_db, entry_user, entry_server):
         e.config(fg="#ffffff")
@@ -215,29 +785,95 @@ def on_select_config(cfg_name):
     entry_pass.delete(0, tk.END); entry_pass.insert(0, decrypt_password(cfg["password"]))
     entry_server.delete(0, tk.END); entry_server.insert(0, cfg["name"])
     
+    # Load interval fields
     entry_interval.delete(0, tk.END)
     entry_interval.insert(0, cfg.get("interval_val", "1"))
     combo_unit.set(cfg.get("interval_unit", "Giờ"))
+    
+    # Khóa form về ReadOnly & Vô hiệu hóa nút "Lưu cấu hình"
     set_entry_state(True)
+    btn_save.config(state="disabled", text="💾 Lưu cấu hình", command=add_new_config)
 
     show_action_buttons()
-    btn_save.config(state="disabled")
+    btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
+
+    # Gợi ý tự động đồng bộ cấu hình DB được chọn sang tab Signature Cropper (AddChuKy)
+    try:
+        active_cfg = {
+            "host": cfg["host"],
+            "port": cfg["port"],
+            "database": cfg["db"],
+            "user": cfg["user"],
+            "password": decrypt_password(cfg["password"])
+        }
+        # 1. Cập nhật active_config vào db_config.json mà KHÔNG xóa mảng "configs"
+        try:
+            full_data = {}
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    full_data = json.load(f)
+                    if not isinstance(full_data, dict):
+                        full_data = {}
+            full_data["configs"] = CONFIG_CACHE
+            full_data["active_config"] = active_cfg
+            full_data["host"] = active_cfg["host"]
+            full_data["port"] = active_cfg["port"]
+            full_data["database"] = active_cfg["database"]
+            full_data["user"] = active_cfg["user"]
+            full_data["password"] = active_cfg["password"]
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(full_data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+        # 2. Ghi file active_db_config.json ở nhiều thư mục mục tiêu cho Signature Cropper
+        import tempfile
+        cand_dirs = [
+            APP_DIR,
+            tempfile.gettempdir(),
+            os.path.join(APP_DIR, "AddChuKy"),
+            os.path.join(APP_DIR, "AddChuKy", "release", "Tool Cut Image-win32-x64"),
+            os.path.join(APP_DIR, "AddChuKy", "release", "Tool Cut Image-win32-x64", "resources", "app")
+        ]
+        for target_dir in cand_dirs:
+            try:
+                if os.path.exists(target_dir):
+                    with open(os.path.join(target_dir, "active_db_config.json"), "w", encoding="utf-8") as f:
+                        json.dump(active_cfg, f, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
+            
+        def _sync_http():
+            try:
+                requests.post("http://localhost:3001/api/active-config", json={"config": active_cfg}, timeout=2)
+            except Exception:
+                pass
+        threading.Thread(target=_sync_http, daemon=True).start()
+        log_message(f"💡 Đã gợi ý tự động điền cấu hình [{cfg_name}] sang tab Signature Cropper.")
+    except Exception:
+        pass
 
 def toggle_edit_mode():
     global edit_mode
     if not last_selected_name:
-        messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để sửa."); return
-    if not edit_mode:
-        set_entry_state(False)
-        edit_mode = True
-        btn_edit.config(text="💾 Lưu", bg="#3b82f6", command=save_edit_changes)
+        messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để sửa.")
+        return
+    set_entry_state(False)
+    btn_save.config(state="normal", command=save_edit_changes)
+    entry_server.focus_set()
+    log_message(f"✏️ Đã mở khóa cấu hình [{last_selected_name}]. Bạn có thể chỉnh sửa rồi nhấn 'Lưu cấu hình'.")
 
 def save_edit_changes():
     global edit_mode
     old_name = last_selected_name
     new_name = entry_server.get().strip()
+    if not new_name or entry_server.cget("fg") == "#a1a1aa":
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên Server.")
+        return
     if any(c["name"].lower() == new_name.lower() and c["name"].lower() != old_name.lower() for c in CONFIG_CACHE):
-        messagebox.showerror("Tên bị trùng", f"Tên '{new_name}' đã tồn tại!"); return
+        messagebox.showerror("Tên bị trùng", f"Tên '{new_name}' đã tồn tại!")
+        return
+
     for i, c in enumerate(CONFIG_CACHE):
         if c["name"].lower() == old_name.lower():
             CONFIG_CACHE[i] = {
@@ -254,15 +890,15 @@ def save_edit_changes():
             break
     save_config_cache()
     refresh_data_list()
-    edit_mode = False
-    btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
-    btn_save.config(state="normal")
+    clear_form()
+    messagebox.showinfo("Thành công", f"Đã cập nhật cấu hình '{new_name}'.")
 
 def delete_config():
     global last_selected_name
     name = last_selected_name
     if not name: return
-    if not messagebox.askyesno("Xác nhận", f"Bạn có chắc chắn muốn xóa '{name}'? \nCác thông tin sau khi xoá sẽ không thể khôi phục lại được."): return
+    if not messagebox.askyesno("Xác nhận", f"Bạn có chắc chắn muốn xóa '{name}'?\nThao tác không thể khôi phục."):
+        return
     CONFIG_CACHE[:] = [c for c in CONFIG_CACHE if c["name"] != name]
     save_config_cache()
     refresh_data_list()
@@ -279,6 +915,7 @@ def clone_config(cfg_name=None):
     if not cfg:
         return
 
+    # Sinh tên cấu hình mới không bị trùng lặp: ví dụ test_bvNTND_copy, test_bvNTND_copy1...
     base_new_name = f"{cfg['name']}_copy"
     new_name = base_new_name
     counter = 1
@@ -287,6 +924,7 @@ def clone_config(cfg_name=None):
         new_name = f"{base_new_name}{counter}"
         counter += 1
 
+    # Mở khóa form để điền và cho phép sửa
     set_entry_state(False)
     for e in (entry_host, entry_port, entry_db, entry_user, entry_server):
         e.config(fg="#ffffff")
@@ -302,14 +940,21 @@ def clone_config(cfg_name=None):
     entry_interval.insert(0, cfg.get("interval_val", "1"))
     combo_unit.set(cfg.get("interval_unit", "Giờ"))
 
+    # Giữ trạng thái form ở chế độ cho phép tạo mới
     edit_mode = False
     btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
 
+    # Hủy chọn cấu hình cũ trong danh sách và bật nút "Lưu cấu hình"
     last_selected_name = ""
     selected_config.set("")
     for w in scroll_frame.winfo_children():
         w.config(bg="#27272a", fg="#f4f4f5")
     selected_label = None
+
+    hide_action_buttons()
+    btn_save.config(state="normal")
+    entry_server.focus_set()
+    log_message(f"📋 Đã sao chép thông tin từ [{target_name}]. Bạn có thể chỉnh sửa các thông tin rồi nhấn 'Lưu cấu hình'.")
 
 hover_popup = None
 hover_timer = None
@@ -450,7 +1095,7 @@ def refresh_data_list():
         lbl.pack(fill="x", padx=5, pady=2)
     hide_action_buttons()
 
-# ===================== CONNECTION & RESET =====================
+# ===================== KẾT NỐI & RESET =====================
 def test_connection():
     try:
         conn = psycopg2.connect(
@@ -459,13 +1104,15 @@ def test_connection():
             database=entry_db.get(),
             user=entry_user.get(),
             password=entry_pass.get(),
-            connect_timeout=5)
+            connect_timeout=5
+        )
         conn.close()
         log_message("✅ Test connection OK.")
     except Exception as e:
         log_message(f"❌ Test connection failed: {e}")
 
 def reset_connection(manual=False):
+    """Reset: kill mọi session trừ session hiện tại. Log chi tiết từng port."""
     host, ports, db, user, pw, name = (
         entry_host.get(),
         entry_port.get().split(","),
@@ -475,15 +1122,16 @@ def reset_connection(manual=False):
         entry_server.get()
     )
 
-    for p in ports:
+    log_message(f"🟦 Bắt đầu reset cho server [{name}]...")
+
+    success_count = 0
+    fail_count = 0
+
+    for p in [x.strip() for x in ports if x.strip()]:
         try:
             conn = psycopg2.connect(
-                host=host,
-                port=int(p.strip()),
-                database=db,
-                user=user,
-                password=pw,
-                connect_timeout=5
+                host=host, port=int(p), database=db,
+                user=user, password=pw, connect_timeout=5
             )
             with conn.cursor() as cur:
                 cur.execute("""
@@ -495,9 +1143,15 @@ def reset_connection(manual=False):
                 """)
             conn.commit()
             conn.close()
-            log_message(f"🔄 [{name}] Successful DB reset \nPort {p.strip()} ({'Manual' if manual else 'Auto'})")
+            success_count += 1
+            log_message(f"✅ [{name}] Reset DB port {p} thành công.")
         except Exception as e:
-            log_message(f"❌ [{name}] Reset failed: {e}")
+            fail_count += 1
+            log_message(f"❌ [{name}] Reset DB port {p} thất bại: {e}")
+
+    total = success_count + fail_count
+    log_message(f"🏁 Hoàn tất reset [{name}] ({'Thủ công' if manual else 'Tự động'}) - "
+                f"Tổng: {total} | OK: {success_count} | Lỗi: {fail_count}\n")
 
 def start_auto_reset():
     global running, reset_thread
@@ -590,14 +1244,17 @@ def embed_electron_window(hwnd):
         pass
     
     try:
+        # Xóa thanh tiêu đề và nút điều khiển
         style = user32.GetWindowLongW(hwnd, GWL_STYLE)
         style &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)
         style |= WS_CHILD
         user32.SetWindowLongW(hwnd, GWL_STYLE, style)
         
+        # Nhúng vào frame_embed
         parent_hwnd = frame_embed.winfo_id()
         user32.SetParent(hwnd, parent_hwnd)
         
+        # Thiết lập kích thước ban đầu
         resize_electron()
         user32.SetWindowPos(hwnd, 0, 0, 0, frame_embed.winfo_width(), frame_embed.winfo_height(), SWP_NOZORDER | SWP_FRAMECHANGED)
     except Exception as e:
@@ -695,9 +1352,15 @@ def create_modern_button(parent, text, bg, hover_bg, command, fg="#ffffff", font
     return btn
 
 app = tk.Tk()
-app.title("Auto Reset DB Tool")
+app.title(f"Auto Reset DB Tool v{CURRENT_VERSION}")
 app.geometry("1200x800")
 app.configure(bg="#121214")
+
+# Icon cửa sổ (tuỳ chọn)
+try:
+    app.iconbitmap("server.ico")
+except Exception as e:
+    print("⚠️ Không thể đặt icon:", e)
 
 # Cấu hình thanh điều hướng trên cùng (Custom Navigation Bar)
 frame_navbar = tk.Frame(app, bg="#1a1a24", height=45)
@@ -923,7 +1586,7 @@ btn_stop.config(state="disabled", cursor="arrow")
 btn_signature = create_modern_button(frame_form_buttons, "🖋️ Signature Cropper", "#6366f1", "#4f46e5", lambda: switch_tab(1))
 btn_signature.grid(row=3, column=0, columnspan=2, sticky="we", padx=4, pady=3, ipady=1)
 
-# RIGHT PANEL (CARD)
+# RIGHT LIST (CARD)
 frame_right = tk.Frame(tab_reset, bg="#1a1a24", padx=25, pady=20, highlightthickness=1, highlightbackground="#2d2d3a")
 frame_right.grid(row=0, column=1, padx=15, pady=15, sticky="nsew")
 
@@ -970,4 +1633,22 @@ app.protocol("WM_DELETE_WINDOW", on_app_close)
 # INIT
 load_config_cache()
 refresh_data_list()
+flush_update_buffer_to_ui()
+refresh_title_from_local_version(app)
+
+# Tự động kiểm tra bản cập nhật mới trên server sau 1.5s khởi chạy UI
+if 'app' in globals() and app:
+    app.after(1500, lambda: check_for_update(auto_restart=False, is_startup=True))
+
+    def schedule_periodic_update_check():
+        try:
+            check_for_update(auto_restart=False, is_startup=False)
+        except Exception:
+            pass
+        finally:
+            if 'app' in globals() and app:
+                app.after(300000, schedule_periodic_update_check) # Lặp lại mỗi 5 phút khi app đang mở
+
+    app.after(300000, schedule_periodic_update_check)
+
 app.mainloop()

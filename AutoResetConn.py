@@ -496,10 +496,31 @@ def load_or_create_key():
         sys.exit(1)
 
 fernet = load_or_create_key()
-def encrypt_password(p): return fernet.encrypt(p.encode()).decode()
-def decrypt_password(p):
-    try: return fernet.decrypt(p.encode()).decode()
-    except: return "•••••"
+
+def encrypt_val(val):
+    if not val:
+        return ""
+    val_str = str(val).strip()
+    if val_str.startswith("gAAAAA"):
+        return val_str
+    try:
+        return fernet.encrypt(val_str.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return val_str
+
+def decrypt_val(val):
+    if not val:
+        return ""
+    val_str = str(val).strip()
+    if not val_str.startswith("gAAAAA"):
+        return val_str
+    try:
+        return fernet.decrypt(val_str.encode("utf-8")).decode("utf-8")
+    except Exception:
+        return val_str
+
+def encrypt_password(p): return encrypt_val(p)
+def decrypt_password(p): return decrypt_val(p)
 
 # ===================== GLOBAL STATE =====================
 running = False
@@ -569,44 +590,77 @@ def load_config_cache():
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
-                    CONFIG_CACHE = data.get("configs", [])
+                    raw_list = data.get("configs", [])
                 elif isinstance(data, list):
-                    CONFIG_CACHE = data
+                    raw_list = data
                 else:
-                    CONFIG_CACHE = []
+                    raw_list = []
+                
+                CONFIG_CACHE = []
+                for item in raw_list:
+                    if isinstance(item, dict):
+                        c = dict(item)
+                        c["host"] = decrypt_val(c.get("host", ""))
+                        c["port"] = decrypt_val(c.get("port", ""))
+                        c["db"] = decrypt_val(c.get("db", ""))
+                        c["user"] = decrypt_val(c.get("user", ""))
+                        c["password"] = decrypt_val(c.get("password", ""))
+                        CONFIG_CACHE.append(c)
         except Exception:
             CONFIG_CACHE = []
     else:
         CONFIG_CACHE = []
     
-    # Ghi lại bản đồng bộ sang Temp/AddChuKy ngay lập tức khi ứng dụng vừa mở
+    # Ghi lại bản mã hóa 100% chuẩn trên đĩa & bản tạm trong Temp ngay khi mở ứng dụng
     save_config_cache()
 
 def save_config_cache():
     try:
-        decrypted_configs = []
-        for c in CONFIG_CACHE:
-            item = dict(c)
-            try:
-                item["plain_password"] = decrypt_password(c.get("password", ""))
-            except Exception:
-                item["plain_password"] = ""
-            decrypted_configs.append(item)
+        encrypted_configs_for_file = []
+        decrypted_configs_for_temp = []
 
-        full_data = {}
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                    full_data = json.load(f)
-                    if not isinstance(full_data, dict):
-                        full_data = {}
-            except Exception:
-                full_data = {}
-        full_data["configs"] = decrypted_configs
+        for c in CONFIG_CACHE:
+            host_dec = decrypt_val(c.get("host", ""))
+            port_dec = decrypt_val(c.get("port", ""))
+            db_dec = decrypt_val(c.get("db", ""))
+            user_dec = decrypt_val(c.get("user", ""))
+            pass_dec = decrypt_val(c.get("password", ""))
+
+            enc_item = {
+                "name": c.get("name", ""),
+                "host": encrypt_val(host_dec),
+                "port": encrypt_val(port_dec),
+                "db": encrypt_val(db_dec),
+                "user": encrypt_val(user_dec),
+                "password": encrypt_val(pass_dec),
+                "interval_val": c.get("interval_val", "1"),
+                "interval_unit": c.get("interval_unit", "Giờ"),
+                "created": c.get("created", "")
+            }
+            encrypted_configs_for_file.append(enc_item)
+
+            dec_item = {
+                "name": c.get("name", ""),
+                "host": host_dec,
+                "port": port_dec,
+                "db": db_dec,
+                "user": user_dec,
+                "password": pass_dec,
+                "plain_password": pass_dec,
+                "interval_val": c.get("interval_val", "1"),
+                "interval_unit": c.get("interval_unit", "Giờ"),
+                "created": c.get("created", "")
+            }
+            decrypted_configs_for_temp.append(dec_item)
+
+        # Ghi file db_config.json chính thức: Chỉ giữ "name" dạng chữ, còn lại mã hóa 100%!
+        full_data = {"configs": encrypted_configs_for_file}
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(full_data, f, indent=2, ensure_ascii=False)
 
+        # Ghi file tạm giải mã riêng trong %TEMP% cho Signature Cropper đọc cục bộ
         import tempfile
+        temp_data = {"configs": decrypted_configs_for_temp}
         cand_dirs = [
             tempfile.gettempdir(),
             os.path.join(APP_DIR, "AddChuKy"),
@@ -617,7 +671,7 @@ def save_config_cache():
             try:
                 if os.path.exists(target_dir):
                     with open(os.path.join(target_dir, "db_config.json"), "w", encoding="utf-8") as f:
-                        json.dump(full_data, f, indent=2, ensure_ascii=False)
+                        json.dump(temp_data, f, indent=2, ensure_ascii=False)
             except Exception:
                 pass
     except Exception as e:
