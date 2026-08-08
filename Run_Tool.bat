@@ -12,8 +12,10 @@ del "%TEMP_VBS%"
 exit /b
 
 :RUN
-if exist "dist\AutoResetConn.exe" (
-    start "" "dist\AutoResetConn.exe"
-) else (
+if exist "AutoResetConn.py" (
     uv run --with requests --with psycopg2-binary --with cryptography AutoResetConn.py
+) else if exist "dist\AutoResetConn.exe" (
+    start "" "dist\AutoResetConn.exe"
+) else if exist "AutoResetConn.exe" (
+    start "" "AutoResetConn.exe"
 )
