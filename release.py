@@ -2,6 +2,7 @@ import os
 import sys
 import datetime
 import subprocess
+import zipfile
 
 # Đảm bảo in unicode ra console Windows không bị lỗi
 if sys.platform.startswith('win'):
@@ -16,10 +17,7 @@ VERSION_LOCAL_FILE = os.path.join(APP_DIR, "version_local.txt")
 
 def get_next_version():
     now = datetime.datetime.now()
-    # mm: 1 ký tự (tháng 1-9), 2 ký tự (tháng 10-12). dd: luôn 2 ký tự (01-31)
     today_str = f"{now.year}.{now.month}.{now.strftime('%d')}"
-    
-    # Phiên bản mặc định đầu tiên trong ngày
     next_ver = f"{today_str}.1"
     
     if os.path.exists(VERSION_FILE):
@@ -27,7 +25,6 @@ def get_next_version():
             with open(VERSION_FILE, "r", encoding="utf-8") as f:
                 current_ver = f.read().strip()
             
-            # Định dạng: YYYY.MM.DD.X hoặc YYYY.M.D.X
             parts = current_ver.split(".")
             if len(parts) == 4:
                 curr_year = int(parts[0])
@@ -35,13 +32,75 @@ def get_next_version():
                 curr_day = int(parts[2])
                 curr_x = int(parts[3])
                 
-                # So sánh dạng số nguyên để bỏ qua ảnh hưởng của số 0 ở đầu
                 if curr_year == now.year and curr_month == now.month and curr_day == now.day:
                     next_ver = f"{today_str}.{curr_x + 1}"
         except Exception as e:
             print(f"⚠️ Cảnh báo khi đọc version.txt: {e}")
             
     return next_ver
+
+def create_offline_packages(next_ver):
+    print(f"\n📦 Đang tạo gói nén cài đặt Offline cho phiên bản v{next_ver}...")
+    dist_dir = os.path.join(APP_DIR, "dist")
+    os.makedirs(dist_dir, exist_ok=True)
+
+    files_to_pack = [
+        "version.txt",
+        "version_local.txt",
+        "AutoResetConn.py",
+        "core",
+        "README.md",
+        "Run_Tool.bat",
+        "Chay_Tool_An_Terminal.vbs",
+        "server.ico",
+        "secret.key"
+    ]
+    if os.path.exists(os.path.join(APP_DIR, "AddChuKy")):
+        files_to_pack.append("AddChuKy")
+    if os.path.exists(os.path.join(dist_dir, "AutoResetConn.dat")):
+        files_to_pack.append(os.path.join("dist", "AutoResetConn.dat"))
+    if os.path.exists(os.path.join(dist_dir, "AutoResetConn.exe")):
+        files_to_pack.append(os.path.join("dist", "AutoResetConn.exe"))
+
+    zip_filename = f"AutoResetConn_Offline_v{next_ver}.zip"
+    rar_filename = f"AutoResetConn_Offline_v{next_ver}.rar"
+    zip_path = os.path.join(dist_dir, zip_filename)
+    rar_path = os.path.join(dist_dir, rar_filename)
+
+    # 1. Tạo file ZIP
+    try:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for item in files_to_pack:
+                abs_item = os.path.join(APP_DIR, item)
+                if os.path.isfile(abs_item):
+                    zf.write(abs_item, os.path.basename(item))
+                elif os.path.isdir(abs_item):
+                    for root, dirs, files in os.walk(abs_item):
+                        for f in files:
+                            full_f = os.path.join(root, f)
+                            rel_f = os.path.relpath(full_f, APP_DIR)
+                            zf.write(full_f, rel_f)
+        print(f"  ✅ Đã tạo gói nén ZIP offline: {zip_path}")
+    except Exception as e:
+        print(f"  ⚠️ Lỗi khi tạo file ZIP: {e}")
+
+    # 2. Tạo file RAR bằng WinRAR.exe (nếu có WinRAR)
+    winrar_paths = [
+        r"C:\Program Files\WinRAR\WinRAR.exe",
+        r"C:\Program Files (x86)\WinRAR\WinRAR.exe"
+    ]
+    winrar_exe = next((p for p in winrar_paths if os.path.exists(p)), None)
+    if winrar_exe:
+        try:
+            if os.path.exists(rar_path):
+                os.remove(rar_path)
+            cmd = [winrar_exe, "a", "-afrar", rar_path] + [os.path.join(APP_DIR, item) for item in files_to_pack]
+            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"  ✅ Đã tạo gói nén RAR offline: {rar_path}")
+        except Exception as e:
+            print(f"  ⚠️ Cảnh báo tạo file RAR: {e}")
+    else:
+        print("  ℹ️ Chưa phát hiện WinRAR trong hệ thống, đã dùng file ZIP offline làm giải pháp thay thế.")
 
 def main():
     next_ver = get_next_version()
@@ -54,53 +113,54 @@ def main():
         with open(VERSION_LOCAL_FILE, "w", encoding="utf-8") as f:
             f.write(next_ver)
         
-        # Cập nhật version_local.txt trong dist nếu có
         dist_dir = os.path.join(APP_DIR, "dist")
-        if os.path.exists(dist_dir):
-            dist_ver_file = os.path.join(dist_dir, "version_local.txt")
-            with open(dist_ver_file, "w", encoding="utf-8") as f:
-                f.write(next_ver)
-                
-            # Mã hóa AutoResetConn.py thành AutoResetConn.dat trong dist/
-            py_path = os.path.join(APP_DIR, "AutoResetConn.py")
-            dat_path = os.path.join(dist_dir, "AutoResetConn.dat")
-            key_path = os.path.join(APP_DIR, "secret.key")
-            dist_key_path = os.path.join(dist_dir, "secret.key")
+        os.makedirs(dist_dir, exist_ok=True)
+        dist_ver_file = os.path.join(dist_dir, "version_local.txt")
+        with open(dist_ver_file, "w", encoding="utf-8") as f:
+            f.write(next_ver)
             
-            if os.path.exists(py_path):
-                try:
-                    from cryptography.fernet import Fernet
-                    if os.path.exists(key_path):
-                        with open(key_path, "rb") as f:
-                            key = f.read()
-                    else:
-                        key = Fernet.generate_key()
-                        with open(key_path, "wb") as f:
-                            f.write(key)
-                    
-                    with open(dist_key_path, "wb") as f:
+        py_path = os.path.join(APP_DIR, "AutoResetConn.py")
+        dat_path = os.path.join(dist_dir, "AutoResetConn.dat")
+        key_path = os.path.join(APP_DIR, "secret.key")
+        dist_key_path = os.path.join(dist_dir, "secret.key")
+        
+        if os.path.exists(py_path):
+            try:
+                from cryptography.fernet import Fernet
+                if os.path.exists(key_path):
+                    with open(key_path, "rb") as f:
+                        key = f.read()
+                else:
+                    key = Fernet.generate_key()
+                    with open(key_path, "wb") as f:
                         f.write(key)
+                
+                with open(dist_key_path, "wb") as f:
+                    f.write(key)
 
-                    with open(py_path, "r", encoding="utf-8") as f:
-                        code = f.read()
+                with open(py_path, "r", encoding="utf-8") as f:
+                    code = f.read()
 
-                    cipher = Fernet(key)
-                    encrypted = cipher.encrypt(code.encode("utf-8"))
-                    with open(dat_path, "wb") as f:
-                        f.write(encrypted)
-                    print("🔒 Đã cập nhật bản mã hóa dist/AutoResetConn.dat")
-                except Exception as ex:
-                    print(f"⚠️ Không thể cập nhật AutoResetConn.dat: {ex}")
+                cipher = Fernet(key)
+                encrypted = cipher.encrypt(code.encode("utf-8"))
+                with open(dat_path, "wb") as f:
+                    f.write(encrypted)
+                print("🔒 Đã cập nhật bản mã hóa dist/AutoResetConn.dat")
+            except Exception as ex:
+                print(f"⚠️ Không thể cập nhật AutoResetConn.dat: {ex}")
 
         print("✅ Đã cập nhật version.txt và version_local.txt")
     except Exception as e:
         print(f"❌ Lỗi ghi file version: {e}")
         sys.exit(1)
-        
-    # 2. Chạy các lệnh Git
-    print("\n📦 Đang tiến hành push lên Git...")
+
+    # 2. Tạo gói cài đặt nén Offline (.rar / .zip)
+    create_offline_packages(next_ver)
+
+    # 3. Chạy các lệnh Git Push
+    print("\n📦 Đang tiến hành push bản build mới lên Git...")
     commands = [
-        ["git", "add", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", ".gitignore", "AddChuKy/"],
+        ["git", "add", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md", "dist/"],
         ["git", "commit", "-m", f"Release v{next_ver}"],
         ["git", "push"]
     ]
@@ -123,11 +183,11 @@ def main():
             
     if git_failed:
         print("\n⚠️ Không thể tự động push Git. Vui lòng chạy thủ công các lệnh sau:")
-        print(f"  git add version.txt version_local.txt core/AutoResetConn.py AutoResetConn.py")
+        print(f"  git add version.txt version_local.txt core/AutoResetConn.py AutoResetConn.py release.py dist/")
         print(f"  git commit -m \"Release v{next_ver}\"")
         print(f"  git push")
     else:
-        print(f"\n🎉 Thành công! Phiên bản mới v{next_ver} đã được đẩy lên GitHub.")
+        print(f"\n🎉 Thành công! Phiên bản mới v{next_ver} đã được cập nhật & đẩy lên GitHub.")
 
 if __name__ == "__main__":
     main()

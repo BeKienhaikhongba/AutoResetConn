@@ -12,6 +12,14 @@ Author: BeKienhaikhongba
 
 import os, sys, json, time, threading, subprocess
 
+# Đảm bảo in unicode ra console Windows không bị lỗi
+if sys.platform.startswith('win'):
+    import io
+    if hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 # ===================== EXE WRAPPER LOADER =====================
 # Nếu chạy từ file .exe đóng gói, tự động ưu tiên nạp và chạy code mới nhất từ file mã hóa hoặc script ngoài.
 if getattr(sys, "frozen", False) and not globals().get("_LAUNCHED_BY_EXE"):
@@ -238,6 +246,8 @@ def download_and_replace(remote_ver, auto_restart=False):
     except Exception as e:
         log_update(f"❌ Lỗi khi cập nhật: {e}")
 
+NEW_VERSION_AVAILABLE = None
+
 def is_remote_newer(local_ver, remote_ver):
     try:
         local_parts = [int(p) for p in local_ver.split('.')]
@@ -246,7 +256,15 @@ def is_remote_newer(local_ver, remote_ver):
     except Exception:
         return remote_ver != local_ver
 
-def check_for_update(auto_restart=False):
+def confirm_and_download_update(remote_ver):
+    if messagebox.askyesno(
+        "Cập nhật phần mềm",
+        f"Bạn có muốn tải và cập nhật ứng dụng lên phiên bản mới nhất v{remote_ver} không?\n\n👉 Ứng dụng sẽ tự động tải dữ liệu và khởi động lại."
+    ):
+        download_and_replace(remote_ver, auto_restart=True)
+
+def check_for_update(auto_restart=False, is_startup=True):
+    global NEW_VERSION_AVAILABLE
     try:
         log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...")
         r = requests.get(VERSION_URL, timeout=7)
@@ -257,13 +275,40 @@ def check_for_update(auto_restart=False):
         if not is_remote_newer(CURRENT_VERSION, remote_ver):
             log_update("✅ Đang dùng bản mới nhất.")
             return
-        log_update(f"🔔 Phát hiện bản mới: v{remote_ver} → bắt đầu tải...")
-        download_and_replace(remote_ver, auto_restart)
+
+        NEW_VERSION_AVAILABLE = remote_ver
+        log_update(f"🔔 Phát hiện bản mới trên server: v{remote_ver}")
+
+        def show_navbar_update_button():
+            try:
+                if 'btn_update_notify' in globals() and btn_update_notify:
+                    btn_update_notify.config(
+                        text=f"⬇ Cập Nhật Phần Mềm ({remote_ver})",
+                        command=lambda: confirm_and_download_update(remote_ver)
+                    )
+                    btn_update_notify.pack(side="right", fill="y", padx=15)
+            except Exception:
+                pass
+
+        if 'app' in globals() and app:
+            app.after(0, show_navbar_update_button)
+
+        if not is_startup:
+            def prompt_in_app():
+                if messagebox.askyesno(
+                    "Phát hiện bản cập nhật mới",
+                    f"Đã có bản cập nhật mới (v{remote_ver})!\n\nBạn có muốn cập nhật ngay bây giờ không?"
+                ):
+                    download_and_replace(remote_ver, auto_restart=True)
+
+            if 'app' in globals() and app:
+                app.after(100, prompt_in_app)
+
     except Exception as e:
         log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}")
 
 # Gọi updater sớm (log sẽ buffer, UI lên sẽ flush)
-check_for_update(auto_restart=False)
+check_for_update(auto_restart=False, is_startup=True)
 
 # ===================== ENCRYPTION =====================
 def load_or_create_key():
@@ -391,7 +436,7 @@ def clear_form():
     last_selected_name = ""
     edit_mode = False
     btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
-    btn_save.config(state="normal")  # bật lại Lưu cấu hình
+    btn_save.config(state="normal", command=add_new_config)
     hide_action_buttons()
 
 def add_new_config():
@@ -426,6 +471,7 @@ def add_new_config():
     CONFIG_CACHE.append(cfg)
     save_config_cache()
     refresh_data_list()
+    clear_form()
     messagebox.showinfo("Thành công", f"Đã thêm cấu hình '{name}'.")
 
 def on_select_config(cfg_name):
@@ -437,7 +483,7 @@ def on_select_config(cfg_name):
         selected_config.set("")
         if selected_label and selected_label.winfo_exists():
             selected_label.config(bg="#27272a", fg="#f4f4f5")
-        btn_save.config(state="normal")
+        btn_save.config(state="normal", command=add_new_config)
         return
 
     last_selected_name = cfg_name
@@ -476,15 +522,18 @@ def toggle_edit_mode():
     if not last_selected_name:
         messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để sửa.")
         return
-    if not edit_mode:
-        set_entry_state(False)
-        edit_mode = True
-        btn_edit.config(text="💾 Lưu", bg="#3b82f6", command=save_edit_changes)
+    set_entry_state(False)
+    btn_save.config(state="normal", command=save_edit_changes)
+    entry_server.focus_set()
+    log_message(f"✏️ Đã mở khóa cấu hình [{last_selected_name}]. Bạn có thể chỉnh sửa rồi nhấn 'Lưu cấu hình'.")
 
 def save_edit_changes():
     global edit_mode
     old_name = last_selected_name
     new_name = entry_server.get().strip()
+    if not new_name or entry_server.cget("fg") == "#a1a1aa":
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên Server.")
+        return
     if any(c["name"].lower() == new_name.lower() and c["name"].lower() != old_name.lower() for c in CONFIG_CACHE):
         messagebox.showerror("Tên bị trùng", f"Tên '{new_name}' đã tồn tại!")
         return
@@ -505,9 +554,8 @@ def save_edit_changes():
             break
     save_config_cache()
     refresh_data_list()
-    edit_mode = False
-    btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
-    btn_save.config(state="normal")
+    clear_form()
+    messagebox.showinfo("Thành công", f"Đã cập nhật cấu hình '{new_name}'.")
 
 def delete_config():
     global last_selected_name
@@ -520,13 +568,193 @@ def delete_config():
     refresh_data_list()
     clear_form()
 
+def clone_config(cfg_name=None):
+    global last_selected_name, edit_mode, selected_label
+    target_name = cfg_name if cfg_name else last_selected_name
+    if not target_name:
+        messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để tạo bản sao.")
+        return
+
+    cfg = next((c for c in CONFIG_CACHE if c["name"] == target_name), None)
+    if not cfg:
+        return
+
+    # Sinh tên cấu hình mới không bị trùng lặp: ví dụ test_bvNTND_copy, test_bvNTND_copy1...
+    base_new_name = f"{cfg['name']}_copy"
+    new_name = base_new_name
+    counter = 1
+    existing_names = [c["name"].lower() for c in CONFIG_CACHE]
+    while new_name.lower() in existing_names:
+        new_name = f"{base_new_name}{counter}"
+        counter += 1
+
+    # Mở khóa form để điền và cho phép sửa
+    set_entry_state(False)
+    for e in (entry_host, entry_port, entry_db, entry_user, entry_server):
+        e.config(fg="#ffffff")
+
+    entry_host.delete(0, tk.END); entry_host.insert(0, cfg["host"])
+    entry_port.delete(0, tk.END); entry_port.insert(0, cfg["port"])
+    entry_db.delete(0, tk.END); entry_db.insert(0, cfg["db"])
+    entry_user.delete(0, tk.END); entry_user.insert(0, cfg["user"])
+    entry_pass.delete(0, tk.END); entry_pass.insert(0, decrypt_password(cfg["password"]))
+    entry_server.delete(0, tk.END); entry_server.insert(0, new_name)
+
+    entry_interval.delete(0, tk.END)
+    entry_interval.insert(0, cfg.get("interval_val", "1"))
+    combo_unit.set(cfg.get("interval_unit", "Giờ"))
+
+    # Giữ trạng thái form ở chế độ cho phép tạo mới
+    edit_mode = False
+    btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
+
+    # Hủy chọn cấu hình cũ trong danh sách và bật nút "Lưu cấu hình"
+    last_selected_name = ""
+    selected_config.set("")
+    for w in scroll_frame.winfo_children():
+        w.config(bg="#27272a", fg="#f4f4f5")
+    selected_label = None
+
+    hide_action_buttons()
+    btn_save.config(state="normal")
+    entry_server.focus_set()
+    log_message(f"📋 Đã sao chép thông tin từ [{target_name}]. Bạn có thể chỉnh sửa các thông tin rồi nhấn 'Lưu cấu hình'.")
+
+hover_popup = None
+hover_timer = None
+hovered_cfg_name = None
+
+def schedule_hide_hover_popup():
+    global hover_timer
+    if hover_timer:
+        try: app.after_cancel(hover_timer)
+        except Exception: pass
+    hover_timer = app.after(250, hide_hover_popup_if_outside)
+
+def hide_hover_popup_if_outside():
+    global hover_popup, hover_timer, hovered_cfg_name
+    if hover_popup and hover_popup.winfo_exists():
+        try:
+            mx, my = app.winfo_pointerx(), app.winfo_pointery()
+            px, py = hover_popup.winfo_rootx(), hover_popup.winfo_rooty()
+            pw, ph = hover_popup.winfo_width(), hover_popup.winfo_height()
+            
+            if not (px - 5 <= mx <= px + pw + 5 and py - 5 <= my <= py + ph + 5):
+                hover_popup.destroy()
+                hover_popup = None
+                hovered_cfg_name = None
+        except Exception:
+            pass
+
+def show_hover_options_menu(event, cfg_name, lbl_widget):
+    global hover_popup, hover_timer, hovered_cfg_name
+    if hover_timer:
+        try: app.after_cancel(hover_timer)
+        except Exception: pass
+        hover_timer = None
+
+    if hover_popup and hover_popup.winfo_exists():
+        if hovered_cfg_name == cfg_name:
+            return
+        try: hover_popup.destroy()
+        except Exception: pass
+
+    hovered_cfg_name = cfg_name
+
+    popup = tk.Toplevel(app)
+    popup.overrideredirect(True)
+    popup.attributes("-topmost", True)
+    popup.configure(bg="#18181b")
+
+    container = tk.Frame(popup, bg="#18181b", highlightthickness=1, highlightbackground="#6366f1", padx=4, pady=4)
+    container.pack(fill="both", expand=True)
+
+    header = tk.Label(container, text=f"⚙️ {cfg_name}", bg="#18181b", fg="#a1a1aa", 
+                      font=("Segoe UI", 9, "bold"), anchor="w", padx=8, pady=3)
+    header.pack(fill="x")
+
+    sep = tk.Frame(container, bg="#27272a", height=1)
+    sep.pack(fill="x", pady=(2, 4))
+
+    menu_items = [
+        ("▶ Sử dụng", lambda: on_select_config(cfg_name), "#3b82f6", "#60a5fa"),
+        ("📋 Tạo bản sao (Nhân bản)", lambda: clone_config(cfg_name), "#8b5cf6", "#a78bfa"),
+        ("✏️ Sửa cấu hình", lambda: [on_select_config(cfg_name), toggle_edit_mode()], "#f59e0b", "#fbbf24"),
+        ("❌ Xóa cấu hình", lambda: [on_select_config(cfg_name), delete_config()], "#ef4444", "#f87171"),
+    ]
+
+    def make_action(cmd):
+        def action(e=None):
+            global hover_popup, hovered_cfg_name
+            if hover_popup and hover_popup.winfo_exists():
+                try: hover_popup.destroy()
+                except Exception: pass
+                hover_popup = None
+                hovered_cfg_name = None
+            cmd()
+        return action
+
+    for text, cmd, bg_color, text_color in menu_items:
+        item_frame = tk.Frame(container, bg="#18181b", cursor="hand2", padx=6, pady=3)
+        lbl = tk.Label(item_frame, text=text, bg="#18181b", fg="#f4f4f5", 
+                       font=("Segoe UI", 9, "bold"), anchor="w", cursor="hand2")
+        lbl.pack(side="left", fill="x", expand=True)
+        item_frame.pack(fill="x", pady=1)
+
+        def on_item_enter(e, f=item_frame, l=lbl, tc=text_color):
+            if hover_timer:
+                try: app.after_cancel(hover_timer)
+                except Exception: pass
+            f.config(bg="#27272a")
+            l.config(bg="#27272a", fg=tc)
+
+        def on_item_leave(e, f=item_frame, l=lbl):
+            f.config(bg="#18181b")
+            l.config(bg="#18181b", fg="#f4f4f5")
+            schedule_hide_hover_popup()
+
+        act = make_action(cmd)
+        item_frame.bind("<Enter>", on_item_enter)
+        item_frame.bind("<Leave>", on_item_leave)
+        item_frame.bind("<Button-1>", act)
+        lbl.bind("<Enter>", on_item_enter)
+        lbl.bind("<Leave>", on_item_leave)
+        lbl.bind("<Button-1>", act)
+
+    try:
+        x = lbl_widget.winfo_rootx() + lbl_widget.winfo_width() + 6
+        y = lbl_widget.winfo_rooty() - 2
+    except Exception:
+        x = event.x_root + 10
+        y = event.y_root
+
+    popup.geometry(f"+{x}+{y}")
+    popup.bind("<Leave>", lambda e: schedule_hide_hover_popup())
+    popup.bind("<Enter>", lambda e: app.after_cancel(hover_timer) if hover_timer else None)
+    hover_popup = popup
+
 def refresh_data_list():
     for w in scroll_frame.winfo_children(): w.destroy()
     for cfg in CONFIG_CACHE:
-        lbl = tk.Label(scroll_frame, text=cfg["name"], bg="#27272a", fg="#f4f4f5", 
-                       anchor="w", font=("Segoe UI", 10), padx=8, pady=4, cursor="hand2")
-        lbl.bind("<Enter>", lambda e, b=lbl: b.config(bg="#3f3f46") if b.cget("bg") == "#27272a" else None)
-        lbl.bind("<Leave>", lambda e, b=lbl: b.config(bg="#27272a") if b.cget("bg") == "#3f3f46" else None)
+        is_selected = (cfg["name"] == last_selected_name)
+        bg_col = "#4f46e5" if is_selected else "#27272a"
+        fg_col = "#ffffff" if is_selected else "#f4f4f5"
+
+        lbl = tk.Label(scroll_frame, text=cfg["name"], bg=bg_col, fg=fg_col, 
+                       anchor="w", font=("Segoe UI", 10), padx=10, pady=6, cursor="hand2")
+        
+        def on_lbl_enter(e, b=lbl, name=cfg["name"]):
+            if b.cget("bg") != "#4f46e5":
+                b.config(bg="#3f3f46")
+            show_hover_options_menu(e, name, b)
+
+        def on_lbl_leave(e, b=lbl):
+            if b.cget("bg") != "#4f46e5":
+                b.config(bg="#27272a")
+            schedule_hide_hover_popup()
+
+        lbl.bind("<Enter>", on_lbl_enter)
+        lbl.bind("<Leave>", on_lbl_leave)
         lbl.bind("<Button-1>", lambda e, name=cfg["name"]: on_select_config(name))
         lbl.pack(fill="x", padx=5, pady=2)
     hide_action_buttons()
@@ -803,6 +1031,15 @@ frame_navbar = tk.Frame(app, bg="#1a1a24", height=45)
 frame_navbar.pack(fill="x", side="top")
 frame_navbar.pack_propagate(False)
 
+# Nút thông báo cập nhật phần mềm (hiển thị khi có bản mới)
+btn_update_notify = tk.Button(
+    frame_navbar, text="", bg="#1a1a24", fg="#ef4444", 
+    activebackground="#27272a", activeforeground="#dc2626",
+    relief="flat", bd=0, font=("Segoe UI", 10, "bold"), cursor="hand2", padx=15
+)
+btn_update_notify.bind("<Enter>", lambda e: btn_update_notify.config(bg="#27272a"))
+btn_update_notify.bind("<Leave>", lambda e: btn_update_notify.config(bg="#1a1a24"))
+
 # Đường kẻ phân tách mỏng
 divider = tk.Frame(app, bg="#2d2d3a", height=1)
 divider.pack(fill="x", side="top")
@@ -1030,22 +1267,8 @@ canvas.pack(side="left", fill="both", expand=True)
 scrollbar.pack(side="right", fill="y")
 
 selected_config = tk.StringVar()
-frame_buttons = tk.Frame(frame_right, bg="#1a1a24")
-frame_buttons.pack(pady=15)
-
-btn_use = create_modern_button(frame_buttons, "▶ Dùng", "#3b82f6", "#2563eb", lambda: on_select_config(last_selected_name))
-btn_edit = create_modern_button(frame_buttons, "✏️ Sửa", "#f59e0b", "#d97706", toggle_edit_mode)
-btn_delete = create_modern_button(frame_buttons, "❌ Xóa", "#ef4444", "#dc2626", delete_config)
-
-def hide_action_buttons():
-    btn_use.grid_remove()
-    btn_edit.grid_remove()
-    btn_delete.grid_remove()
-
-def show_action_buttons():
-    btn_use.grid(row=0, column=0, padx=6)
-    btn_edit.grid(row=0, column=1, padx=6)
-    btn_delete.grid(row=0, column=2, padx=6)
+def hide_action_buttons(): pass
+def show_action_buttons(): pass
 
 # LOG UI (TERMINAL LOG)
 lbl_log_title = tk.Label(tab_reset, text="Log hoạt động:", bg="#121214", fg="#f4f4f5", font=("Segoe UI", 11, "bold"), anchor="w")
