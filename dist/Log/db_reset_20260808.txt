@@ -6,3 +6,13 @@
 [2026-08-08 12:59:26] [AutoUpdate] [2026-08-08 12:59:25] 🔔 Phát hiện bản mới trên server: v2026.8.08.11
 [2026-08-08 13:05:20] [AutoUpdate] [2026-08-08 13:05:20] 🔔 Phát hiện bản mới trên server: v2026.8.08.13
 [2026-08-08 13:08:53] [AutoUpdate] [2026-08-08 13:08:52] 🔔 Phát hiện bản mới trên server: v2026.8.08.14
+[2026-08-08 17:34:17] [AutoUpdate] [2026-08-08 17:34:16] 🔔 Phát hiện bản mới trên server: v2026.8.08.15
+[2026-08-08 17:34:44] ❌ Test connection failed: connection to server at "192.168.16.79", port 6688 failed: timeout expired
+
+[2026-08-08 17:35:05] ❌ Test connection failed: connection to server at "27.72.192.2", port 6688 failed: FATAL:  password authentication failed for user "postgres"
+
+[2026-08-08 17:35:14] ❌ Test connection failed: connection to server at "27.72.192.2", port 6688 failed: FATAL:  password authentication failed for user "postgres"
+
+[2026-08-08 17:35:50] ✅ Test connection OK.
+[2026-08-08 17:35:59] ✅ Test connection OK.
+[2026-08-08 17:36:12] ✅ Test connection OK.

@@ -1,0 +1,37 @@
+====================================================================
+  BỘ CÔNG CỤ AUTO RESET CONNECT (EHC TOOL) - RELEASE v2026.8.08.17
+====================================================================
+Thời gian đóng gói : 2026-08-08 17:39:06
+Phiên bản phát hành: v2026.8.08.17
+Môi trường đáp ứng : Windows 10 / 11 (64-bit)
+
+--------------------------------------------------------------------
+1. DANH SÁCH FILE TRONG BỘ BẢN NÉN (RELEASE PACKAGE):
+--------------------------------------------------------------------
+- AutoResetConn.exe         : Chương trình chính (Production Standalone Executable)
+- AutoResetConn.dat         : Core logic mã hóa bảo mật (Fernet encrypted payload)
+- secret.key                : Khóa giải mã lõi chương trình
+- Run_Tool.bat              : Script khởi chạy nhanh có hiển thị/ẩn cửa sổ log
+- Chay_Tool_An_Terminal.vbs : Script khởi chạy ngầm 100% không hiện Terminal
+- db_config.json            : Cấu hình kết nối cơ sở dữ liệu mẫu
+- server.ico                : Biểu tượng ứng dụng
+- README.md                 : Tài liệu hướng dẫn sử dụng chi tiết
+- RELEASE_NOTES.txt         : Thông tin phiên bản & Hướng dẫn cài đặt này
+
+--------------------------------------------------------------------
+2. ĐẶC ĐIỂM NỔI BẬT & BẢO MẬT:
+--------------------------------------------------------------------
+- Bảo mật mã nguồn: Toàn bộ mã nguồn Python (.py) đã được mã hóa vào AutoResetConn.dat,
+  tuyệt đối không để lộ thông tin kỹ thuật hay câu lệnh nhạy cảm.
+- Cập nhật tự động: Tích hợp cơ chế tự động tải và khởi động lại qua Windows Shell (explorer.exe),
+  đảm bảo quá trình nâng cấp không bị lỗi DLL hay xung đột tiến trình.
+- Đóng gói chuẩn: Đầy đủ các file cấu hình, script khởi chạy và tài liệu hướng dẫn.
+
+--------------------------------------------------------------------
+3. HƯỚNG DẪN SỬ DỤNG:
+--------------------------------------------------------------------
+Cách 1: Chạy trực tiếp file 'AutoResetConn.exe' để mở giao diện làm việc.
+Cách 2: Chạy qua file 'Chay_Tool_An_Terminal.vbs' để chương trình chạy ngầm hoàn toàn.
+Cách 3: Chạy qua 'Run_Tool.bat' nếu cần bật/tắt chế độ xem log Terminal.
+
+====================================================================

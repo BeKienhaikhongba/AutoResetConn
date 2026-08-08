@@ -10,6 +10,17 @@
       "interval_val": "1",
       "interval_unit": "Giờ",
       "created": "2026-08-07 10:50:41"
+    },
+    {
+      "name": "bvducgiang_public",
+      "host": "27.72.192.2",
+      "port": "6688",
+      "db": "bvducgiang",
+      "user": "postgres",
+      "password": "gAAAAABqdwadenZh1mFJp3w8hUdBXtJYk0iW7WU1LlLAWReC5zFQYtYeb3w7IzgloLlAn7Bo1lg1MYrgEYFqah9jkzGAG4nLxQ==",
+      "interval_val": "1",
+      "interval_unit": "Giờ",
+      "created": "2026-08-08 17:36:13"
     }
   ]
 }

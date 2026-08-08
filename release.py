@@ -39,6 +39,51 @@ def get_next_version():
             
     return next_ver
 
+def generate_release_notes(next_ver):
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    notes_content = f"""====================================================================
+  BỘ CÔNG CỤ AUTO RESET CONNECT (EHC TOOL) - RELEASE v{next_ver}
+====================================================================
+Thời gian đóng gói : {now_str}
+Phiên bản phát hành: v{next_ver}
+Môi trường đáp ứng : Windows 10 / 11 (64-bit)
+
+--------------------------------------------------------------------
+1. DANH SÁCH FILE TRONG BỘ BẢN NÉN (RELEASE PACKAGE):
+--------------------------------------------------------------------
+- AutoResetConn.exe         : Chương trình chính (Production Standalone Executable)
+- AutoResetConn.dat         : Core logic mã hóa bảo mật (Fernet encrypted payload)
+- secret.key                : Khóa giải mã lõi chương trình
+- Run_Tool.bat              : Script khởi chạy nhanh có hiển thị/ẩn cửa sổ log
+- Chay_Tool_An_Terminal.vbs : Script khởi chạy ngầm 100% không hiện Terminal
+- db_config.json            : Cấu hình kết nối cơ sở dữ liệu mẫu
+- server.ico                : Biểu tượng ứng dụng
+- README.md                 : Tài liệu hướng dẫn sử dụng chi tiết
+- RELEASE_NOTES.txt         : Thông tin phiên bản & Hướng dẫn cài đặt này
+
+--------------------------------------------------------------------
+2. ĐẶC ĐIỂM NỔI BẬT & BẢO MẬT:
+--------------------------------------------------------------------
+- Bảo mật mã nguồn: Toàn bộ mã nguồn Python (.py) đã được mã hóa vào AutoResetConn.dat,
+  tuyệt đối không để lộ thông tin kỹ thuật hay câu lệnh nhạy cảm.
+- Cập nhật tự động: Tích hợp cơ chế tự động tải và khởi động lại qua Windows Shell (explorer.exe),
+  đảm bảo quá trình nâng cấp không bị lỗi DLL hay xung đột tiến trình.
+- Đóng gói chuẩn: Đầy đủ các file cấu hình, script khởi chạy và tài liệu hướng dẫn.
+
+--------------------------------------------------------------------
+3. HƯỚNG DẪN SỬ DỤNG:
+--------------------------------------------------------------------
+Cách 1: Chạy trực tiếp file 'AutoResetConn.exe' để mở giao diện làm việc.
+Cách 2: Chạy qua file 'Chay_Tool_An_Terminal.vbs' để chương trình chạy ngầm hoàn toàn.
+Cách 3: Chạy qua 'Run_Tool.bat' nếu cần bật/tắt chế độ xem log Terminal.
+
+====================================================================
+"""
+    notes_path = os.path.join(APP_DIR, "dist", "RELEASE_NOTES.txt")
+    with open(notes_path, "w", encoding="utf-8") as f:
+        f.write(notes_content)
+    return notes_path
+
 def create_offline_packages(next_ver):
     print(f"\n📦 Đang tạo gói nén cập nhật Core Offline (.rar) cho v{next_ver}...")
     dist_dir = os.path.join(APP_DIR, "dist")
@@ -52,13 +97,20 @@ def create_offline_packages(next_ver):
             except Exception:
                 pass
 
-    # Bảo mật: Không đóng gói file .py mã nguồn gốc vào gói nén .rar
+    # Tạo file RELEASE_NOTES.txt chi tiết tự động
+    notes_path = generate_release_notes(next_ver)
+
+    # Đóng gói đầy đủ tài liệu, cấu hình và bộ chạy (Tuyệt đối không nén mã nguồn .py)
     files_to_pack = [
-        # ("version.txt", os.path.join(APP_DIR, "version.txt")),
-        # ("version_local.txt", os.path.join(APP_DIR, "version_local.txt")),
+        ("AutoResetConn.exe", os.path.join(dist_dir, "AutoResetConn.exe")),
         ("AutoResetConn.dat", os.path.join(dist_dir, "AutoResetConn.dat")),
         ("secret.key", os.path.join(dist_dir, "secret.key")),
-        ("AutoResetConn.exe", os.path.join(dist_dir, "AutoResetConn.exe")),
+        ("Run_Tool.bat", os.path.join(APP_DIR, "Run_Tool.bat")),
+        ("Chay_Tool_An_Terminal.vbs", os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")),
+        ("db_config.json", os.path.join(APP_DIR, "db_config.json")),
+        ("server.ico", os.path.join(APP_DIR, "server.ico")),
+        ("README.md", os.path.join(APP_DIR, "README.md")),
+        ("RELEASE_NOTES.txt", notes_path),
     ]
 
     rar_filename = f"Core_{next_ver}.rar"
@@ -76,7 +128,7 @@ def create_offline_packages(next_ver):
             valid_files = [abs_path for _, abs_path in files_to_pack if os.path.exists(abs_path)]
             cmd = [winrar_exe, "a", "-ep", "-afrar", rar_path] + valid_files
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"  ✅ Đã tạo gói nén RAR offline: {rar_path}")
+            print(f"  ✅ Đã tạo gói nén RAR offline chuyên nghiệp: {rar_path}")
         except Exception as e:
             print(f"  ⚠️ Cảnh báo tạo file RAR: {e}")
     else:
