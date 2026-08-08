@@ -745,12 +745,20 @@ def on_select_config(cfg_name):
         except Exception:
             pass
 
-        # 2. Ghi file active_db_config.json ở tempdir hệ thống cho Signature Cropper
+        # 2. Ghi file active_db_config.json ở nhiều thư mục mục tiêu cho Signature Cropper
         import tempfile
-        for target_dir in [APP_DIR, tempfile.gettempdir()]:
+        cand_dirs = [
+            APP_DIR,
+            tempfile.gettempdir(),
+            os.path.join(APP_DIR, "AddChuKy"),
+            os.path.join(APP_DIR, "AddChuKy", "release", "Tool Cut Image-win32-x64"),
+            os.path.join(APP_DIR, "AddChuKy", "release", "Tool Cut Image-win32-x64", "resources", "app")
+        ]
+        for target_dir in cand_dirs:
             try:
-                with open(os.path.join(target_dir, "active_db_config.json"), "w", encoding="utf-8") as f:
-                    json.dump(active_cfg, f, indent=2, ensure_ascii=False)
+                if os.path.exists(target_dir):
+                    with open(os.path.join(target_dir, "active_db_config.json"), "w", encoding="utf-8") as f:
+                        json.dump(active_cfg, f, indent=2, ensure_ascii=False)
             except Exception:
                 pass
             
