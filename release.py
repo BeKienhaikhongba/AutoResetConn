@@ -40,11 +40,18 @@ def get_next_version():
     return next_ver
 
 def create_offline_packages(next_ver):
-    print(f"\n📦 Đang tạo gói nén cập nhật Core Offline siêu nhẹ cho v{next_ver}...")
+    print(f"\n📦 Đang tạo gói nén cập nhật Core Offline (.rar) cho v{next_ver}...")
     dist_dir = os.path.join(APP_DIR, "dist")
     os.makedirs(dist_dir, exist_ok=True)
 
-    # CHỈ nén các file module logic cần thiết để nâng cấp (không nén AddChuKy, không nén .exe hay folder thừa)
+    # Dọn dẹp các file zip cũ nếu có
+    for f in os.listdir(dist_dir):
+        if f.endswith(".zip"):
+            try:
+                os.remove(os.path.join(dist_dir, f))
+            except Exception:
+                pass
+
     files_to_pack = [
         ("version.txt", os.path.join(APP_DIR, "version.txt")),
         ("version_local.txt", os.path.join(APP_DIR, "version_local.txt")),
@@ -53,22 +60,9 @@ def create_offline_packages(next_ver):
         ("AutoResetConn.dll", os.path.join(dist_dir, "AutoResetConn.dat")),
     ]
 
-    zip_filename = f"Core_{next_ver}.zip"
     rar_filename = f"Core_{next_ver}.rar"
-    zip_path = os.path.join(dist_dir, zip_filename)
     rar_path = os.path.join(dist_dir, rar_filename)
 
-    # 1. Tạo file ZIP (flat layout, không chứa thư mục thừa)
-    try:
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for arcname, abs_path in files_to_pack:
-                if os.path.exists(abs_path):
-                    zf.write(abs_path, arcname)
-        print(f"  ✅ Đã tạo gói nén ZIP offline siêu nhẹ: {zip_path}")
-    except Exception as e:
-        print(f"  ⚠️ Lỗi khi tạo file ZIP: {e}")
-
-    # 2. Tạo file RAR bằng WinRAR.exe (nếu có WinRAR, cờ -ep để flat layout)
     winrar_paths = [
         r"C:\Program Files\WinRAR\WinRAR.exe",
         r"C:\Program Files (x86)\WinRAR\WinRAR.exe"
@@ -81,11 +75,11 @@ def create_offline_packages(next_ver):
             valid_files = [abs_path for _, abs_path in files_to_pack if os.path.exists(abs_path)]
             cmd = [winrar_exe, "a", "-ep", "-afrar", rar_path] + valid_files
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"  ✅ Đã tạo gói nén RAR offline siêu nhẹ: {rar_path}")
+            print(f"  ✅ Đã tạo gói nén RAR offline: {rar_path}")
         except Exception as e:
             print(f"  ⚠️ Cảnh báo tạo file RAR: {e}")
     else:
-        print("  ℹ️ Chưa phát hiện WinRAR trong hệ thống, đã dùng file ZIP offline làm giải pháp thay thế.")
+        print("  ⚠️ Không tìm thấy WinRAR.exe trên hệ thống để tạo file RAR.")
 
 def main():
     next_ver = get_next_version()
