@@ -26,16 +26,19 @@ if getattr(sys, "frozen", False) and not globals().get("_LAUNCHED_BY_EXE"):
     globals()["_LAUNCHED_BY_EXE"] = True
     app_dir = os.path.dirname(os.path.abspath(sys.executable))
     
-    # 1. Ưu tiên nạp bản mã hóa bảo mật AutoResetConn.dat
+    # 1. Ưu tiên nạp bản mã hóa bảo mật AutoResetConn.dat hoặc AutoResetConn.dll
     dat_path = os.path.join(app_dir, "AutoResetConn.dat")
+    dll_path = os.path.join(app_dir, "AutoResetConn.dll")
+    payload_path = dat_path if os.path.exists(dat_path) else (dll_path if os.path.exists(dll_path) else None)
     key_path = os.path.join(app_dir, "secret.key")
-    if os.path.exists(dat_path) and os.path.exists(key_path):
+
+    if payload_path and os.path.exists(key_path):
         try:
             with open(key_path, "rb") as f:
                 key = f.read()
             from cryptography.fernet import Fernet
             cipher = Fernet(key)
-            with open(dat_path, "rb") as f:
+            with open(payload_path, "rb") as f:
                 encrypted_data = f.read()
             code = cipher.decrypt(encrypted_data).decode('utf-8')
             exec(code, globals())

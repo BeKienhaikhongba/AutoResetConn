@@ -40,51 +40,35 @@ def get_next_version():
     return next_ver
 
 def create_offline_packages(next_ver):
-    print(f"\n📦 Đang tạo gói nén cài đặt Offline cho phiên bản v{next_ver}...")
+    print(f"\n📦 Đang tạo gói nén cập nhật Core Offline siêu nhẹ cho v{next_ver}...")
     dist_dir = os.path.join(APP_DIR, "dist")
     os.makedirs(dist_dir, exist_ok=True)
 
+    # CHỈ nén các file module logic cần thiết để nâng cấp (không nén AddChuKy, không nén .exe hay folder thừa)
     files_to_pack = [
-        "version.txt",
-        "version_local.txt",
-        "AutoResetConn.py",
-        "core",
-        "README.md",
-        "Run_Tool.bat",
-        "Chay_Tool_An_Terminal.vbs",
-        "server.ico",
-        "secret.key"
+        ("version.txt", os.path.join(APP_DIR, "version.txt")),
+        ("version_local.txt", os.path.join(APP_DIR, "version_local.txt")),
+        ("AutoResetConn.py", os.path.join(APP_DIR, "AutoResetConn.py")),
+        ("AutoResetConn.dat", os.path.join(dist_dir, "AutoResetConn.dat")),
+        ("AutoResetConn.dll", os.path.join(dist_dir, "AutoResetConn.dat")),
     ]
-    if os.path.exists(os.path.join(APP_DIR, "AddChuKy")):
-        files_to_pack.append("AddChuKy")
-    if os.path.exists(os.path.join(dist_dir, "AutoResetConn.dat")):
-        files_to_pack.append(os.path.join("dist", "AutoResetConn.dat"))
-    if os.path.exists(os.path.join(dist_dir, "AutoResetConn.exe")):
-        files_to_pack.append(os.path.join("dist", "AutoResetConn.exe"))
 
     zip_filename = f"Core_{next_ver}.zip"
     rar_filename = f"Core_{next_ver}.rar"
     zip_path = os.path.join(dist_dir, zip_filename)
     rar_path = os.path.join(dist_dir, rar_filename)
 
-    # 1. Tạo file ZIP
+    # 1. Tạo file ZIP (flat layout, không chứa thư mục thừa)
     try:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for item in files_to_pack:
-                abs_item = os.path.join(APP_DIR, item)
-                if os.path.isfile(abs_item):
-                    zf.write(abs_item, os.path.basename(item))
-                elif os.path.isdir(abs_item):
-                    for root, dirs, files in os.walk(abs_item):
-                        for f in files:
-                            full_f = os.path.join(root, f)
-                            rel_f = os.path.relpath(full_f, APP_DIR)
-                            zf.write(full_f, rel_f)
-        print(f"  ✅ Đã tạo gói nén ZIP offline: {zip_path}")
+            for arcname, abs_path in files_to_pack:
+                if os.path.exists(abs_path):
+                    zf.write(abs_path, arcname)
+        print(f"  ✅ Đã tạo gói nén ZIP offline siêu nhẹ: {zip_path}")
     except Exception as e:
         print(f"  ⚠️ Lỗi khi tạo file ZIP: {e}")
 
-    # 2. Tạo file RAR bằng WinRAR.exe (nếu có WinRAR)
+    # 2. Tạo file RAR bằng WinRAR.exe (nếu có WinRAR, cờ -ep để flat layout)
     winrar_paths = [
         r"C:\Program Files\WinRAR\WinRAR.exe",
         r"C:\Program Files (x86)\WinRAR\WinRAR.exe"
@@ -94,9 +78,10 @@ def create_offline_packages(next_ver):
         try:
             if os.path.exists(rar_path):
                 os.remove(rar_path)
-            cmd = [winrar_exe, "a", "-afrar", rar_path] + [os.path.join(APP_DIR, item) for item in files_to_pack]
+            valid_files = [abs_path for _, abs_path in files_to_pack if os.path.exists(abs_path)]
+            cmd = [winrar_exe, "a", "-ep", "-afrar", rar_path] + valid_files
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print(f"  ✅ Đã tạo gói nén RAR offline: {rar_path}")
+            print(f"  ✅ Đã tạo gói nén RAR offline siêu nhẹ: {rar_path}")
         except Exception as e:
             print(f"  ⚠️ Cảnh báo tạo file RAR: {e}")
     else:
