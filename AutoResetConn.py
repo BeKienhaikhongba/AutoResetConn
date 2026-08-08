@@ -164,23 +164,26 @@ def log_update(msg):
     print(line)
     _buf(line)
 
-def download_and_replace(remote_ver, auto_restart=False, silent=False):
+def download_and_replace(remote_ver, auto_restart=False):
     global CURRENT_VERSION
     try:
         is_frozen = getattr(sys, "frozen", False)
         
         if is_frozen:
+            # Chạy từ file .exe -> chỉ tải AutoResetConn.py và lưu dưới dạng mã hóa AutoResetConn.dat
             rel = "AutoResetConn.py"
             url = FILES_TO_UPDATE[rel]
             log_update(f"⏬ Tải {rel} (mã hóa bảo mật) từ {url}")
             r = requests.get(url, timeout=15)
             if r.status_code == 200:
+                # Mã hóa bằng key
                 key = None
                 key_path = os.path.join(APP_DIR, "secret.key")
                 if os.path.exists(key_path):
                     with open(key_path, "rb") as f:
                         key = f.read()
                 else:
+                    # Nếu chưa có key thì tạo mới
                     key = Fernet.generate_key()
                     with open(key_path, "wb") as f:
                         f.write(key)
@@ -196,6 +199,7 @@ def download_and_replace(remote_ver, auto_restart=False, silent=False):
                 log_update(f"❌ Không tải được {url} (status={r.status_code})")
                 return
         else:
+            # Chạy từ file script .py bình thường -> tải và ghi đè như cũ
             for rel, url in FILES_TO_UPDATE.items():
                 dst = os.path.join(APP_DIR, rel)
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -215,7 +219,7 @@ def download_and_replace(remote_ver, auto_restart=False, silent=False):
 
         if auto_restart:
             log_update("🔁 Khởi động lại để áp dụng cập nhật...")
-            time.sleep(0.5)
+            time.sleep(0.2)
             restart_app()
 
     except Exception as e:
@@ -232,13 +236,32 @@ def is_remote_newer(local_ver, remote_ver):
         return remote_ver != local_ver
 
 def restart_app():
+    """Thực thi khởi động lại ứng dụng 100% tin cậy trên Windows (hỗ trợ cả .exe và .py script)"""
     try:
-        os.execl(sys.executable, sys.executable, *sys.argv)
-    except Exception:
-        sys.exit(0)
+        if 'app' in globals() and app:
+            try:
+                app.after(0, app.destroy)
+            except Exception:
+                pass
+
+        if getattr(sys, "frozen", False):
+            exe_path = sys.executable
+            cmd = [exe_path] + sys.argv[1:]
+            subprocess.Popen(cmd, cwd=APP_DIR, creationflags=0x08000000 if sys.platform.startswith('win') else 0)
+        else:
+            bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
+            if os.path.exists(bat_path):
+                subprocess.Popen(["cmd.exe", "/c", "start", "", bat_path], cwd=APP_DIR, shell=True)
+            else:
+                subprocess.Popen([sys.executable, os.path.join(APP_DIR, "AutoResetConn.py")], cwd=APP_DIR)
+    except Exception as e:
+        print("❌ Lỗi khi restart_app:", e)
+    finally:
+        time.sleep(0.2)
+        os._exit(0)
 
 def show_update_loading_window(remote_ver):
-    """Tạo cửa sổ Loading hiện đại thông báo đang tải bản mới, tự động khởi động lại khi hoàn tất."""
+    """Tạo cửa sổ Loading hiện đại thông báo đang tải bản mới, tự động khởi động lại ngay khi hoàn tất."""
     try:
         win = tk.Toplevel(app)
         win.title("Đang cập nhật phần mềm")
@@ -283,7 +306,7 @@ def show_update_loading_window(remote_ver):
         def run_download_task():
             try:
                 download_and_replace(remote_ver, auto_restart=False, silent=True)
-                restart_app()
+                win.after(10, restart_app)
             except Exception as ex:
                 win.after(0, lambda: lbl_status.config(text=f"❌ Lỗi: {ex}", fg="#ef4444"))
 
@@ -390,7 +413,7 @@ def flush_update_buffer_to_ui():
         try:
             btn_update_notify.config(
                 text=f"⬇ Cập Nhật Phần Mềm ({NEW_VERSION_AVAILABLE})",
-                command=lambda: show_update_loading_window(NEW_VERSION_AVAILABLE)
+                command=lambda: confirm_and_download_update(NEW_VERSION_AVAILABLE)
             )
             btn_update_notify.pack(side="right", fill="y", padx=15)
         except Exception:
