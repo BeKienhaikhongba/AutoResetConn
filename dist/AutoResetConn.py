@@ -1,0 +1,1399 @@
+# -*- coding: utf-8 -*-
+"""
+Auto Reset DB Tool + Auto-Updater (Full) v5.1
+- UI Tkinter quản lý cấu hình DB (lưu/ sửa/ xóa/ dùng)
+- Reset kết nối PostgreSQL thủ công / tự động mỗi 1 giờ
+- Log ra file TXT theo ngày: Log/db_reset_YYYYMMDD.txt
+- Mã hóa password bằng Fernet (secret.key lưu trong thư mục app)
+- Auto-Updater: kiểm tra version trên GitHub, tải file core/... mới (nếu có)
+- Tự tạo thư mục Log, file cấu hình và secret.key nếu chưa có
+Author: BeKienhaikhongba
+"""
+
+import os, sys, json, time, threading, subprocess
+
+# Đảm bảo in unicode ra console Windows không bị lỗi
+if sys.platform.startswith('win'):
+    import io
+    if hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+# ===================== EXE WRAPPER LOADER =====================
+# Nếu chạy từ file .exe đóng gói, tự động ưu tiên nạp và chạy code mới nhất từ file mã hóa hoặc script ngoài.
+if getattr(sys, "frozen", False) and not globals().get("_LAUNCHED_BY_EXE"):
+    globals()["_LAUNCHED_BY_EXE"] = True
+    app_dir = os.path.dirname(os.path.abspath(sys.executable))
+    
+    # 1. Ưu tiên nạp bản mã hóa bảo mật AutoResetConn.dat hoặc AutoResetConn.dll
+    dat_path = os.path.join(app_dir, "AutoResetConn.dat")
+    dll_path = os.path.join(app_dir, "AutoResetConn.dll")
+    payload_path = dat_path if os.path.exists(dat_path) else (dll_path if os.path.exists(dll_path) else None)
+    key_path = os.path.join(app_dir, "secret.key")
+
+    if payload_path and os.path.exists(key_path):
+        try:
+            with open(key_path, "rb") as f:
+                key = f.read()
+            from cryptography.fernet import Fernet
+            cipher = Fernet(key)
+            with open(payload_path, "rb") as f:
+                encrypted_data = f.read()
+            code = cipher.decrypt(encrypted_data).decode('utf-8')
+            exec(code, globals())
+            sys.exit(0)
+        except Exception as e:
+            print("⚠️ Lỗi nạp bản mã hóa, thử nạp bản raw:", e)
+
+    # 2. Dự phòng nạp bản raw nếu có (chỉ dùng cho dev)
+    py_path = os.path.join(app_dir, "AutoResetConn.py")
+    if os.path.exists(py_path):
+        try:
+            with open(py_path, "r", encoding="utf-8") as f:
+                code = f.read()
+            exec(code, globals())
+            sys.exit(0)
+        except Exception as e:
+            print("⚠️ Lỗi nạp script ngoài, sử dụng bản build sẵn:", e)
+from datetime import datetime
+import tkinter as tk
+from tkinter import messagebox, scrolledtext, Menu, Canvas, ttk
+import requests
+import psycopg2
+from cryptography.fernet import Fernet
+
+# ===================== WIN32 API DECLARATIONS =====================
+if sys.platform.startswith('win'):
+    import ctypes
+    user32 = ctypes.windll.user32
+    GWL_STYLE = -16
+    WS_CHILD = 0x40000000
+    WS_CAPTION = 0x00C00000
+    WS_THICKFRAME = 0x00040000
+    WS_MINIMIZEBOX = 0x00020000
+    WS_MAXIMIZEBOX = 0x00010000
+    WS_SYSMENU = 0x00080000
+    SWP_NOZORDER = 0x0004
+    SWP_FRAMECHANGED = 0x0020
+else:
+    user32 = None
+
+
+# ===================== APP PATH & FILES =====================
+"""
+APP_DIR = (
+    os.path.dirname(os.path.abspath(sys.executable))
+    if getattr(sys, "frozen", False)
+    else os.path.dirname(os.path.abspath(__file__))
+)
+CONFIG_FILE = os.path.join(APP_DIR, "db_config.json")
+LOG_DIR = os.path.join(APP_DIR, "Log")
+SECRET_KEY_FILE = os.path.join(APP_DIR, "secret.key")
+UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
+
+# Khởi tạo thư mục/ file cần thiết
+try:
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"configs": []}, f, indent=2, ensure_ascii=False)
+except PermissionError as e:
+    messagebox.showerror(
+        "Lỗi quyền truy cập",
+        f"Không thể ghi trong thư mục bộ cài:\n{APP_DIR}\n\nChi tiết: {e}\n"
+        "👉 Vui lòng chạy bằng quyền Administrator."
+    )
+    sys.exit(1)"""
+if getattr(sys, "frozen", False):
+    # Đang chạy file .exe -> trỏ tới thư mục chứa file .exe thật sự
+    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+CONFIG_FILE = os.path.join(APP_DIR, "db_config.json")
+LOG_DIR = os.path.join(APP_DIR, "Log")
+SECRET_KEY_FILE = os.path.join(APP_DIR, "secret.key")
+UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
+
+# 🔧 Tự tạo các file/thư mục cần thiết tại nơi đặt .exe
+try:
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    if not os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump({"configs": []}, f, indent=2, ensure_ascii=False)
+except Exception as e:
+    messagebox.showerror(
+        "Lỗi quyền truy cập",
+        f"Không thể tạo file/ thư mục cấu hình tại {APP_DIR}\n\nChi tiết: {e}\n"
+        "👉 Vui lòng chạy bằng quyền Administrator."
+    )
+    sys.exit(1)
+
+# ===================== AUTO-UPDATER =====================
+def get_current_version():
+    """Đọc version hiện tại từ file version_local.txt (hoặc mặc định nếu chưa có)."""
+    vf = os.path.join(APP_DIR, "version_local.txt")
+    try:
+        with open(vf, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "5.0.0"  # lần đầu chạy
+
+CURRENT_VERSION = get_current_version()
+VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/version.txt"
+# Tùy repo của bạn: nếu file bạn muốn cập nhật nằm ở core/AutoResetConn.py thì giữ như dưới
+FILES_TO_UPDATE = {
+    "AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py",
+    "core/AutoResetConn.py": "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/core/AutoResetConn.py"
+}
+
+# Buffer log updater → sẽ đẩy vào UI sau khi UI sẵn sàng
+_UPDATE_UI_BUFFER = []
+def _buf(msg): _UPDATE_UI_BUFFER.append(msg)
+
+def log_update(msg, is_ui=True, is_file=True):
+    """
+    Tiêu chí ghi log:
+    - is_file=True: Ghi chi tiết đầy đủ (URLs, status, mã hóa, traceback) vào update_log.txt để tra cứu kỹ thuật.
+    - is_ui=True: Chỉ đẩy các thông điệp tóm tắt cần thiết lên màn hình ứng dụng.
+    """
+    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
+    if is_file:
+        try:
+            with open(UPDATE_LOG, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
+    if is_ui:
+        print(line)
+        _buf(line)
+
+def download_and_replace(remote_ver, auto_restart=False):
+    global CURRENT_VERSION
+    try:
+        is_frozen = getattr(sys, "frozen", False)
+        
+        if is_frozen:
+            rel = "AutoResetConn.py"
+            url = FILES_TO_UPDATE[rel]
+            log_update(f"⏬ Tải {rel} (mã hóa bảo mật) từ {url}", is_ui=False, is_file=True)
+            r = requests.get(url, timeout=15)
+            if r.status_code == 200:
+                key = None
+                key_path = os.path.join(APP_DIR, "secret.key")
+                if os.path.exists(key_path):
+                    with open(key_path, "rb") as f:
+                        key = f.read()
+                else:
+                    key = Fernet.generate_key()
+                    with open(key_path, "wb") as f:
+                        f.write(key)
+                
+                if key:
+                    cipher = Fernet(key)
+                    encrypted_data = cipher.encrypt(r.text.encode('utf-8'))
+                    dat_path = os.path.join(APP_DIR, "AutoResetConn.dat")
+                    with open(dat_path, "wb") as f:
+                        f.write(encrypted_data)
+                    log_update("✅ Đã cập nhật bản mã hóa bảo mật: AutoResetConn.dat", is_ui=False, is_file=True)
+            else:
+                log_update(f"❌ Không tải được {url} (status={r.status_code})", is_ui=True, is_file=True)
+                return
+        else:
+            for rel, url in FILES_TO_UPDATE.items():
+                dst = os.path.join(APP_DIR, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                log_update(f"⏬ Tải {rel} từ {url}", is_ui=False, is_file=True)
+                r = requests.get(url, timeout=15)
+                if r.status_code != 200:
+                    log_update(f"❌ Không tải được {url} (status={r.status_code})", is_ui=True, is_file=True)
+                    continue
+                with open(dst, "w", encoding="utf-8") as f:
+                    f.write(r.text)
+                log_update(f"✅ Cập nhật thành công file: {rel}", is_ui=False, is_file=True)
+
+        with open(os.path.join(APP_DIR, "version_local.txt"), "w", encoding="utf-8") as f:
+            f.write(remote_ver)
+        log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}", is_ui=True, is_file=True)
+        CURRENT_VERSION = remote_ver
+
+        if auto_restart:
+            log_update("🔁 Khởi động lại để áp dụng cập nhật...", is_ui=True, is_file=True)
+            time.sleep(0.1)
+            restart_app()
+
+    except Exception as e:
+        log_update(f"❌ Lỗi khi cập nhật: {e}", is_ui=True, is_file=True)
+
+NEW_VERSION_AVAILABLE = None
+
+def is_remote_newer(local_ver, remote_ver):
+    try:
+        local_parts = [int(p) for p in local_ver.split('.')]
+        remote_parts = [int(p) for p in remote_ver.split('.')]
+        return remote_parts > local_parts
+    except Exception:
+        return remote_ver != local_ver
+
+def restart_app():
+    """Thực thi khởi động lại ứng dụng 100% ẩn cửa sổ terminal trên Windows (hỗ trợ cả .exe và .py script)"""
+    try:
+        if 'app' in globals() and app:
+            try:
+                app.after(0, app.destroy)
+            except Exception:
+                pass
+
+        vbs_path = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
+        bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
+        creationflags = 0x08000000 if sys.platform.startswith('win') else 0
+
+        # Xóa duy nhất _MEIPASS2 và _MEIPASS khỏi env để PyInstaller không dùng lại folder tạm cũ của tiến trình cha
+        # Giữ nguyên biến PATH để _tkinter nạp DLL bình thường
+        env = os.environ.copy()
+        env.pop("_MEIPASS2", None)
+        env.pop("_MEIPASS", None)
+
+        if getattr(sys, "frozen", False):
+            # Nếu đang chạy từ file AutoResetConn.exe bản đóng gói single-file
+            exe_path = sys.executable
+            import tempfile
+            restart_bat = os.path.join(tempfile.gettempdir(), f"restart_tool_{os.getpid()}.bat")
+            with open(restart_bat, "w", encoding="utf-8") as f:
+                f.write(f'@echo off\ntimeout /t 1 /nobreak > nul\nstart "" "{exe_path}"\ndel "%~f0"\n')
+            subprocess.Popen(["cmd.exe", "/c", restart_bat], cwd=APP_DIR, env=env, creationflags=creationflags)
+        elif os.path.exists(vbs_path):
+            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, env=env, creationflags=creationflags)
+        elif os.path.exists(bat_path):
+            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, env=env, creationflags=creationflags)
+        else:
+            subprocess.Popen(
+                ["uv", "run", "--with", "requests", "--with", "psycopg2-binary", "--with", "cryptography", "AutoResetConn.py"],
+                cwd=APP_DIR, env=env, creationflags=creationflags
+            )
+    except Exception as e:
+        print("❌ Lỗi khi restart_app:", e)
+    finally:
+        time.sleep(0.1)
+        os._exit(0)
+
+def show_update_loading_window(remote_ver):
+    """Tạo cửa sổ Loading hiện đại thông báo đang tải bản mới, tự động khởi động lại ngay khi hoàn tất."""
+    try:
+        win = tk.Toplevel(app)
+        win.title("Đang cập nhật phần mềm")
+        win.geometry("460x170")
+        win.configure(bg="#18181b")
+        win.resizable(False, False)
+        win.transient(app)
+        win.grab_set()
+
+        win.update_idletasks()
+        try:
+            x = app.winfo_x() + (app.winfo_width() // 2) - 230
+            y = app.winfo_y() + (app.winfo_height() // 2) - 85
+            win.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+        lbl_title = tk.Label(
+            win, 
+            text=f"🔄 ĐANG TẢI BẢN CẬP NHẬT (v{remote_ver})", 
+            fg="#6366f1", bg="#18181b", 
+            font=("Segoe UI", 11, "bold")
+        )
+        lbl_title.pack(pady=(22, 8))
+
+        lbl_status = tk.Label(
+            win, 
+            text="⏳ Đang tải dữ liệu bản mới từ server... Vui lòng chờ.", 
+            fg="#f4f4f5", bg="#18181b", 
+            font=("Segoe UI", 9)
+        )
+        lbl_status.pack(pady=4)
+
+        lbl_sub = tk.Label(
+            win, 
+            text="⚡ Ứng dụng sẽ tự động khởi động lại ngay sau khi tải xong.", 
+            fg="#71717a", bg="#18181b", 
+            font=("Segoe UI", 8, "italic")
+        )
+        lbl_sub.pack(pady=4)
+
+        def run_download_task():
+            try:
+                log_update(f"⏬ Bắt đầu tải bản cập nhật v{remote_ver}...", is_ui=False, is_file=True)
+                download_and_replace(remote_ver, auto_restart=False)
+                win.after(10, restart_app)
+            except Exception as ex:
+                log_update(f"❌ Lỗi tải bản cập nhật: {ex}", is_ui=True, is_file=True)
+                win.after(10, restart_app)
+
+        threading.Thread(target=run_download_task, daemon=True).start()
+    except Exception as e:
+        log_update(f"❌ Lỗi mở cửa sổ loading: {e}", is_ui=True, is_file=True)
+        download_and_replace(remote_ver, auto_restart=True)
+
+def check_for_update(auto_restart=False, is_startup=True):
+    global NEW_VERSION_AVAILABLE
+    try:
+        log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...", is_ui=False, is_file=True)
+        remote_ver = None
+        
+        # 1. Ưu tiên dùng GitHub API để lấy version tức thì (bỏ qua CDN Cache 10 phút của raw URL)
+        try:
+            api_url = "https://api.github.com/repos/BeKienhaikhongba/AutoResetConn/contents/version.txt"
+            r = requests.get(api_url, headers={"Cache-Control": "no-cache", "User-Agent": "AutoResetConnApp"}, timeout=5)
+            if r.status_code == 200:
+                import base64
+                content = r.json().get("content", "")
+                remote_ver = base64.b64decode(content).decode("utf-8").strip()
+        except Exception as ex_api:
+            log_update(f"⚠️ Lỗi GitHub API, dùng fallback Raw URL: {ex_api}", is_ui=False, is_file=True)
+
+        # 2. Fallback nếu API bị nghẽn
+        if not remote_ver:
+            req_url = f"{VERSION_URL}?t={int(time.time())}"
+            r = requests.get(req_url, headers={"Cache-Control": "no-cache"}, timeout=7)
+            if r.status_code == 200:
+                remote_ver = r.text.strip()
+
+        if not remote_ver:
+            log_update("⚠️ Không lấy được version từ server.", is_ui=False, is_file=True)
+            return
+
+        if not is_remote_newer(CURRENT_VERSION, remote_ver):
+            log_update("✅ Đang dùng bản mới nhất.", is_ui=False, is_file=True)
+            return
+
+        NEW_VERSION_AVAILABLE = remote_ver
+        log_update(f"🔔 Phát hiện bản mới trên server: v{remote_ver}", is_ui=True, is_file=True)
+
+        def show_navbar_update_button():
+            try:
+                if 'btn_update_notify' in globals() and btn_update_notify:
+                    btn_update_notify.config(
+                        text=f"⬇ Cập Nhật Phần Mềm ({remote_ver})",
+                        command=lambda: show_update_loading_window(remote_ver)
+                    )
+                    btn_update_notify.pack(side="right", fill="y", padx=15)
+            except Exception:
+                pass
+
+        if 'app' in globals() and app:
+            app.after(0, show_navbar_update_button)
+
+    except Exception as e:
+        log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}", is_ui=False, is_file=True)
+
+# Gọi updater sớm (log sẽ buffer, UI lên sẽ flush)
+check_for_update(auto_restart=False, is_startup=True)
+
+# ===================== ENCRYPTION =====================
+def load_or_create_key():
+    try:
+        if not os.path.exists(SECRET_KEY_FILE):
+            key = Fernet.generate_key()
+            with open(SECRET_KEY_FILE, "wb") as f:
+                f.write(key)
+        else:
+            with open(SECRET_KEY_FILE, "rb") as f:
+                key = f.read()
+        return Fernet(key)
+    except Exception as e:
+        messagebox.showerror("Lỗi tạo key", str(e))
+        sys.exit(1)
+
+fernet = load_or_create_key()
+def encrypt_password(p): return fernet.encrypt(p.encode()).decode()
+def decrypt_password(p):
+    try: return fernet.decrypt(p.encode()).decode()
+    except: return "•••••"
+
+# ===================== GLOBAL STATE =====================
+running = False
+reset_thread = None
+CONFIG_CACHE = []
+edit_mode = False
+selected_label = None
+last_selected_name = ""
+
+# ===================== LOGGING (TXT/ngày) =====================
+def _log_file_today():
+    return os.path.join(LOG_DIR, f"db_reset_{datetime.now():%Y%m%d}.txt")
+
+def log_message(msg, is_ui=True, is_file=True):
+    """
+    Tiêu chí ghi log:
+    - is_file=True: Ghi log chi tiết (SQL query, connection details, traceback) vào file đĩa ngày.
+    - is_ui=True: Chỉ hiển thị các thông điệp tóm tắt cần thiết trên màn hình phần mềm.
+    """
+    line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
+    if is_ui:
+        try:
+            log_area.insert(tk.END, line + "\n")
+            log_area.yview(tk.END)
+        except Exception:
+            pass
+    if is_file:
+        try:
+            with open(_log_file_today(), "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
+
+def clear_log_display():
+    log_area.delete(1.0, tk.END)
+    log_message("🧹 Log hiển thị đã được làm mới (file log vẫn giữ nguyên).")
+
+def flush_update_buffer_to_ui():
+    if _UPDATE_UI_BUFFER:
+        for line in _UPDATE_UI_BUFFER:
+            log_message(f"[AutoUpdate] {line}")
+        _UPDATE_UI_BUFFER.clear()
+
+    if NEW_VERSION_AVAILABLE and 'btn_update_notify' in globals() and btn_update_notify:
+        try:
+            btn_update_notify.config(
+                text=f"⬇ Cập Nhật Phần Mềm ({NEW_VERSION_AVAILABLE})",
+                command=lambda: show_update_loading_window(NEW_VERSION_AVAILABLE)
+            )
+            btn_update_notify.pack(side="right", fill="y", padx=15)
+        except Exception:
+            pass
+
+def refresh_title_from_local_version(app):
+    """Sau khi UI sẵn sàng, đọc lại version_local để set title đúng (nếu vừa update)."""
+    try:
+        v2 = get_current_version()
+        app.title(f"Auto Reset DB Tool v{v2}")
+    except Exception:
+        pass
+
+# ===================== CONFIG MANAGEMENT =====================
+def load_config_cache():
+    global CONFIG_CACHE
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                CONFIG_CACHE = json.load(f).get("configs", [])
+        except Exception:
+            CONFIG_CACHE = []
+    else:
+        CONFIG_CACHE = []
+
+def save_config_cache():
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump({"configs": CONFIG_CACHE}, f, indent=2, ensure_ascii=False)
+
+def set_entry_state(readonly=True):
+    state = "readonly" if readonly else "normal"
+    for e in [entry_host, entry_port, entry_db, entry_user, entry_pass, entry_server]:
+        e.config(state=state)
+
+def set_placeholder(entry, text):
+    entry.delete(0, tk.END)
+    entry.insert(0, text)
+    entry.config(fg="#a1a1aa")
+    def on_focus_in(event):
+        if entry.get() == text and entry.cget("state") == "normal":
+            entry.delete(0, "end")
+            entry.config(fg="#ffffff")
+    def on_focus_out(event):
+        if entry.get() == "" and entry.cget("state") == "normal":
+            entry.insert(0, text)
+            entry.config(fg="#a1a1aa")
+    entry.bind("<FocusIn>", on_focus_in)
+    entry.bind("<FocusOut>", on_focus_out)
+
+def clear_form():
+    global edit_mode, selected_label, last_selected_name
+    for e in [entry_host, entry_port, entry_db, entry_user, entry_pass, entry_server]:
+        e.config(state="normal")
+        e.delete(0, tk.END)
+        e.config(fg="#ffffff")
+    set_placeholder(entry_host, "localhost hoặc 192.168.x.x")
+    set_placeholder(entry_port, "7001,6688")
+    set_placeholder(entry_db, "Nhập tên database")
+    entry_user.insert(0, "postgres")
+    set_placeholder(entry_server, "servername")
+    
+    # reset interval fields
+    entry_interval.config(state="normal")
+    entry_interval.delete(0, tk.END)
+    entry_interval.insert(0, "1")
+    combo_unit.config(state="readonly")
+    combo_unit.set("Giờ")
+
+    selected_config.set("")
+    selected_label = None
+    last_selected_name = ""
+    edit_mode = False
+    btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
+    btn_save.config(state="normal", command=add_new_config)
+    hide_action_buttons()
+
+def add_new_config():
+    name = entry_server.get().strip()
+    if not name or entry_server.cget("fg") == "#a1a1aa":
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên Server.")
+        return
+    if any(c["name"].lower() == name.lower() for c in CONFIG_CACHE):
+        messagebox.showerror("Trùng tên", f"Cấu hình '{name}' đã tồn tại!")
+        return
+    required = [
+        entry_host.get().strip() if entry_host.cget("fg") != "#a1a1aa" else "",
+        entry_port.get().strip() if entry_port.cget("fg") != "#a1a1aa" else "",
+        entry_db.get().strip()   if entry_db.cget("fg") != "#a1a1aa" else "",
+        entry_user.get().strip()
+    ]
+    if any(v == "" for v in required):
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ Host, Port, DB, User.")
+        return
+
+    cfg = {
+        "name": name,
+        "host": entry_host.get(),
+        "port": entry_port.get(),
+        "db": entry_db.get(),
+        "user": entry_user.get(),
+        "password": encrypt_password(entry_pass.get()),
+        "interval_val": entry_interval.get().strip(),
+        "interval_unit": combo_unit.get(),
+        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    CONFIG_CACHE.append(cfg)
+    save_config_cache()
+    refresh_data_list()
+    clear_form()
+    messagebox.showinfo("Thành công", f"Đã thêm cấu hình '{name}'.")
+
+def on_select_config(cfg_name):
+    global selected_label, last_selected_name
+    # Toggle ẩn/hiện khi click lại cùng cấu hình
+    if last_selected_name == cfg_name:
+        hide_action_buttons()
+        last_selected_name = ""
+        selected_config.set("")
+        if selected_label and selected_label.winfo_exists():
+            selected_label.config(bg="#27272a", fg="#f4f4f5")
+        btn_save.config(state="normal", command=add_new_config)
+        return
+
+    last_selected_name = cfg_name
+    cfg = next((c for c in CONFIG_CACHE if c["name"] == cfg_name), None)
+    if not cfg:
+        return
+
+    # highlight
+    for w in scroll_frame.winfo_children(): w.config(bg="#27272a", fg="#f4f4f5")
+    selected_label = [w for w in scroll_frame.winfo_children() if w.cget("text") == cfg_name][0]
+    selected_label.config(bg="#4f46e5", fg="#ffffff")
+
+    # đổ dữ liệu & khóa form
+    set_entry_state(False)
+    for e in (entry_host, entry_port, entry_db, entry_user, entry_server):
+        e.config(fg="#ffffff")
+    entry_host.delete(0, tk.END); entry_host.insert(0, cfg["host"])
+    entry_port.delete(0, tk.END); entry_port.insert(0, cfg["port"])
+    entry_db.delete(0, tk.END); entry_db.insert(0, cfg["db"])
+    entry_user.delete(0, tk.END); entry_user.insert(0, cfg["user"])
+    entry_pass.delete(0, tk.END); entry_pass.insert(0, decrypt_password(cfg["password"]))
+    entry_server.delete(0, tk.END); entry_server.insert(0, cfg["name"])
+    
+    # Load interval fields
+    entry_interval.delete(0, tk.END)
+    entry_interval.insert(0, cfg.get("interval_val", "1"))
+    combo_unit.set(cfg.get("interval_unit", "Giờ"))
+    
+    set_entry_state(True)
+
+    show_action_buttons()
+    btn_save.config(state="disabled")
+
+def toggle_edit_mode():
+    global edit_mode
+    if not last_selected_name:
+        messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để sửa.")
+        return
+    set_entry_state(False)
+    btn_save.config(state="normal", command=save_edit_changes)
+    entry_server.focus_set()
+    log_message(f"✏️ Đã mở khóa cấu hình [{last_selected_name}]. Bạn có thể chỉnh sửa rồi nhấn 'Lưu cấu hình'.")
+
+def save_edit_changes():
+    global edit_mode
+    old_name = last_selected_name
+    new_name = entry_server.get().strip()
+    if not new_name or entry_server.cget("fg") == "#a1a1aa":
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập tên Server.")
+        return
+    if any(c["name"].lower() == new_name.lower() and c["name"].lower() != old_name.lower() for c in CONFIG_CACHE):
+        messagebox.showerror("Tên bị trùng", f"Tên '{new_name}' đã tồn tại!")
+        return
+
+    for i, c in enumerate(CONFIG_CACHE):
+        if c["name"].lower() == old_name.lower():
+            CONFIG_CACHE[i] = {
+                "name": new_name,
+                "host": entry_host.get(),
+                "port": entry_port.get(),
+                "db": entry_db.get(),
+                "user": entry_user.get(),
+                "password": encrypt_password(entry_pass.get()),
+                "interval_val": entry_interval.get().strip(),
+                "interval_unit": combo_unit.get(),
+                "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            break
+    save_config_cache()
+    refresh_data_list()
+    clear_form()
+    messagebox.showinfo("Thành công", f"Đã cập nhật cấu hình '{new_name}'.")
+
+def delete_config():
+    global last_selected_name
+    name = last_selected_name
+    if not name: return
+    if not messagebox.askyesno("Xác nhận", f"Bạn có chắc chắn muốn xóa '{name}'?\nThao tác không thể khôi phục."):
+        return
+    CONFIG_CACHE[:] = [c for c in CONFIG_CACHE if c["name"] != name]
+    save_config_cache()
+    refresh_data_list()
+    clear_form()
+
+def clone_config(cfg_name=None):
+    global last_selected_name, edit_mode, selected_label
+    target_name = cfg_name if cfg_name else last_selected_name
+    if not target_name:
+        messagebox.showinfo("Thông báo", "Vui lòng chọn cấu hình để tạo bản sao.")
+        return
+
+    cfg = next((c for c in CONFIG_CACHE if c["name"] == target_name), None)
+    if not cfg:
+        return
+
+    # Sinh tên cấu hình mới không bị trùng lặp: ví dụ test_bvNTND_copy, test_bvNTND_copy1...
+    base_new_name = f"{cfg['name']}_copy"
+    new_name = base_new_name
+    counter = 1
+    existing_names = [c["name"].lower() for c in CONFIG_CACHE]
+    while new_name.lower() in existing_names:
+        new_name = f"{base_new_name}{counter}"
+        counter += 1
+
+    # Mở khóa form để điền và cho phép sửa
+    set_entry_state(False)
+    for e in (entry_host, entry_port, entry_db, entry_user, entry_server):
+        e.config(fg="#ffffff")
+
+    entry_host.delete(0, tk.END); entry_host.insert(0, cfg["host"])
+    entry_port.delete(0, tk.END); entry_port.insert(0, cfg["port"])
+    entry_db.delete(0, tk.END); entry_db.insert(0, cfg["db"])
+    entry_user.delete(0, tk.END); entry_user.insert(0, cfg["user"])
+    entry_pass.delete(0, tk.END); entry_pass.insert(0, decrypt_password(cfg["password"]))
+    entry_server.delete(0, tk.END); entry_server.insert(0, new_name)
+
+    entry_interval.delete(0, tk.END)
+    entry_interval.insert(0, cfg.get("interval_val", "1"))
+    combo_unit.set(cfg.get("interval_unit", "Giờ"))
+
+    # Giữ trạng thái form ở chế độ cho phép tạo mới
+    edit_mode = False
+    btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
+
+    # Hủy chọn cấu hình cũ trong danh sách và bật nút "Lưu cấu hình"
+    last_selected_name = ""
+    selected_config.set("")
+    for w in scroll_frame.winfo_children():
+        w.config(bg="#27272a", fg="#f4f4f5")
+    selected_label = None
+
+    hide_action_buttons()
+    btn_save.config(state="normal")
+    entry_server.focus_set()
+    log_message(f"📋 Đã sao chép thông tin từ [{target_name}]. Bạn có thể chỉnh sửa các thông tin rồi nhấn 'Lưu cấu hình'.")
+
+hover_popup = None
+hover_timer = None
+hovered_cfg_name = None
+
+def schedule_hide_hover_popup():
+    global hover_timer
+    if hover_timer:
+        try: app.after_cancel(hover_timer)
+        except Exception: pass
+    hover_timer = app.after(250, hide_hover_popup_if_outside)
+
+def hide_hover_popup_if_outside():
+    global hover_popup, hover_timer, hovered_cfg_name
+    if hover_popup and hover_popup.winfo_exists():
+        try:
+            mx, my = app.winfo_pointerx(), app.winfo_pointery()
+            px, py = hover_popup.winfo_rootx(), hover_popup.winfo_rooty()
+            pw, ph = hover_popup.winfo_width(), hover_popup.winfo_height()
+            
+            if not (px - 5 <= mx <= px + pw + 5 and py - 5 <= my <= py + ph + 5):
+                hover_popup.destroy()
+                hover_popup = None
+                hovered_cfg_name = None
+        except Exception:
+            pass
+
+def show_hover_options_menu(event, cfg_name, lbl_widget):
+    global hover_popup, hover_timer, hovered_cfg_name
+    if hover_timer:
+        try: app.after_cancel(hover_timer)
+        except Exception: pass
+        hover_timer = None
+
+    if hover_popup and hover_popup.winfo_exists():
+        if hovered_cfg_name == cfg_name:
+            return
+        try: hover_popup.destroy()
+        except Exception: pass
+
+    hovered_cfg_name = cfg_name
+
+    popup = tk.Toplevel(app)
+    popup.overrideredirect(True)
+    popup.attributes("-topmost", True)
+    popup.configure(bg="#18181b")
+
+    container = tk.Frame(popup, bg="#18181b", highlightthickness=1, highlightbackground="#6366f1", padx=4, pady=4)
+    container.pack(fill="both", expand=True)
+
+    header = tk.Label(container, text=f"⚙️ {cfg_name}", bg="#18181b", fg="#a1a1aa", 
+                      font=("Segoe UI", 9, "bold"), anchor="w", padx=8, pady=3)
+    header.pack(fill="x")
+
+    sep = tk.Frame(container, bg="#27272a", height=1)
+    sep.pack(fill="x", pady=(2, 4))
+
+    menu_items = [
+        ("▶ Sử dụng", lambda: on_select_config(cfg_name), "#3b82f6", "#60a5fa"),
+        ("📋 Tạo bản sao (Nhân bản)", lambda: clone_config(cfg_name), "#8b5cf6", "#a78bfa"),
+        ("✏️ Sửa cấu hình", lambda: [on_select_config(cfg_name), toggle_edit_mode()], "#f59e0b", "#fbbf24"),
+        ("❌ Xóa cấu hình", lambda: [on_select_config(cfg_name), delete_config()], "#ef4444", "#f87171"),
+    ]
+
+    def make_action(cmd):
+        def action(e=None):
+            global hover_popup, hovered_cfg_name
+            if hover_popup and hover_popup.winfo_exists():
+                try: hover_popup.destroy()
+                except Exception: pass
+                hover_popup = None
+                hovered_cfg_name = None
+            cmd()
+        return action
+
+    for text, cmd, bg_color, text_color in menu_items:
+        item_frame = tk.Frame(container, bg="#18181b", cursor="hand2", padx=6, pady=3)
+        lbl = tk.Label(item_frame, text=text, bg="#18181b", fg="#f4f4f5", 
+                       font=("Segoe UI", 9, "bold"), anchor="w", cursor="hand2")
+        lbl.pack(side="left", fill="x", expand=True)
+        item_frame.pack(fill="x", pady=1)
+
+        def on_item_enter(e, f=item_frame, l=lbl, tc=text_color):
+            if hover_timer:
+                try: app.after_cancel(hover_timer)
+                except Exception: pass
+            f.config(bg="#27272a")
+            l.config(bg="#27272a", fg=tc)
+
+        def on_item_leave(e, f=item_frame, l=lbl):
+            f.config(bg="#18181b")
+            l.config(bg="#18181b", fg="#f4f4f5")
+            schedule_hide_hover_popup()
+
+        act = make_action(cmd)
+        item_frame.bind("<Enter>", on_item_enter)
+        item_frame.bind("<Leave>", on_item_leave)
+        item_frame.bind("<Button-1>", act)
+        lbl.bind("<Enter>", on_item_enter)
+        lbl.bind("<Leave>", on_item_leave)
+        lbl.bind("<Button-1>", act)
+
+    try:
+        x = lbl_widget.winfo_rootx() + lbl_widget.winfo_width() + 6
+        y = lbl_widget.winfo_rooty() - 2
+    except Exception:
+        x = event.x_root + 10
+        y = event.y_root
+
+    popup.geometry(f"+{x}+{y}")
+    popup.bind("<Leave>", lambda e: schedule_hide_hover_popup())
+    popup.bind("<Enter>", lambda e: app.after_cancel(hover_timer) if hover_timer else None)
+    hover_popup = popup
+
+def refresh_data_list():
+    for w in scroll_frame.winfo_children(): w.destroy()
+    for cfg in CONFIG_CACHE:
+        is_selected = (cfg["name"] == last_selected_name)
+        bg_col = "#4f46e5" if is_selected else "#27272a"
+        fg_col = "#ffffff" if is_selected else "#f4f4f5"
+
+        lbl = tk.Label(scroll_frame, text=cfg["name"], bg=bg_col, fg=fg_col, 
+                       anchor="w", font=("Segoe UI", 10), padx=10, pady=6, cursor="hand2")
+        
+        def on_lbl_enter(e, b=lbl, name=cfg["name"]):
+            if b.cget("bg") != "#4f46e5":
+                b.config(bg="#3f3f46")
+            show_hover_options_menu(e, name, b)
+
+        def on_lbl_leave(e, b=lbl):
+            if b.cget("bg") != "#4f46e5":
+                b.config(bg="#27272a")
+            schedule_hide_hover_popup()
+
+        lbl.bind("<Enter>", on_lbl_enter)
+        lbl.bind("<Leave>", on_lbl_leave)
+        lbl.bind("<Button-1>", lambda e, name=cfg["name"]: on_select_config(name))
+        lbl.pack(fill="x", padx=5, pady=2)
+    hide_action_buttons()
+
+# ===================== KẾT NỐI & RESET =====================
+def test_connection():
+    try:
+        conn = psycopg2.connect(
+            host=entry_host.get(),
+            port=int(entry_port.get().split(",")[0]),
+            database=entry_db.get(),
+            user=entry_user.get(),
+            password=entry_pass.get(),
+            connect_timeout=5
+        )
+        conn.close()
+        log_message("✅ Test connection OK.")
+    except Exception as e:
+        log_message(f"❌ Test connection failed: {e}")
+
+def reset_connection(manual=False):
+    """Reset: kill mọi session trừ session hiện tại. Log chi tiết từng port."""
+    host, ports, db, user, pw, name = (
+        entry_host.get(),
+        entry_port.get().split(","),
+        entry_db.get(),
+        entry_user.get(),
+        entry_pass.get(),
+        entry_server.get()
+    )
+
+    log_message(f"🟦 Bắt đầu reset cho server [{name}]...")
+
+    success_count = 0
+    fail_count = 0
+
+    for p in [x.strip() for x in ports if x.strip()]:
+        try:
+            conn = psycopg2.connect(
+                host=host, port=int(p), database=db,
+                user=user, password=pw, connect_timeout=5
+            )
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE pid <> pg_backend_pid()
+                    AND state = 'idle'
+                    AND state_change < current_timestamp - INTERVAL '1' MINUTE;
+                """)
+            conn.commit()
+            conn.close()
+            success_count += 1
+            log_message(f"✅ [{name}] Reset DB port {p} thành công.")
+        except Exception as e:
+            fail_count += 1
+            log_message(f"❌ [{name}] Reset DB port {p} thất bại: {e}")
+
+    total = success_count + fail_count
+    log_message(f"🏁 Hoàn tất reset [{name}] ({'Thủ công' if manual else 'Tự động'}) - "
+                f"Tổng: {total} | OK: {success_count} | Lỗi: {fail_count}\n")
+
+def start_auto_reset():
+    global running, reset_thread
+    if running: return
+    running = True
+    reset_thread = threading.Thread(target=auto_reset_loop, daemon=True)
+    reset_thread.start()
+    log_message("▶️ Auto reset started.")
+    btn_auto.config(state="disabled", bg="#27272a", cursor="arrow")
+    btn_stop.config(state="normal", bg="#ef4444", cursor="hand2")
+    entry_interval.config(state="readonly")
+    combo_unit.config(state="disabled")
+
+def auto_reset_loop():
+    global running
+    while running:
+        try:
+            try:
+                val = float(entry_interval.get().strip())
+            except ValueError:
+                val = 1.0
+                log_message("⚠️ Thời gian lặp không hợp lệ, sử dụng mặc định 1 giờ.")
+            
+            unit = combo_unit.get()
+            if unit == "Giờ":
+                reset_interval = int(val * 3600)
+                time_str = f"{val:.1f}".rstrip('0').rstrip('.') + " giờ"
+            elif unit == "Phút":
+                reset_interval = int(val * 60)
+                time_str = f"{val:.1f}".rstrip('0').rstrip('.') + " phút"
+            else:
+                reset_interval = int(val)
+                time_str = f"{val:.1f}".rstrip('0').rstrip('.') + " giây"
+                
+            reset_connection()
+            log_message(f"⏰ Chờ {time_str} trước lần reset tiếp theo...\n")
+        except Exception as e:
+            import traceback
+            log_message(f"❌ Lỗi luồng Auto Reset: {e}\n{traceback.format_exc()}")
+            reset_interval = 60
+        time.sleep(reset_interval)
+
+def stop_auto_reset():
+    global running
+    running = False
+    log_message("🛑 Auto reset stopped.")
+    btn_auto.config(state="normal", bg="#10b981", cursor="hand2")
+    btn_stop.config(state="disabled", bg="#27272a", cursor="arrow")
+    entry_interval.config(state="normal")
+    combo_unit.config(state="readonly")
+
+electron_process = None
+electron_hwnd = None
+is_launching = False
+
+def find_hwnd_by_title(title_substring):
+    if not user32:
+        return None
+    hwnd_found = []
+    def enum_windows_callback(hwnd, lParam):
+        if user32.IsWindowVisible(hwnd):
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buf = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buf, length + 1)
+                if title_substring.lower() in buf.value.lower():
+                    hwnd_found.append(hwnd)
+                    return False
+        return True
+    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
+    return hwnd_found[0] if hwnd_found else None
+
+def resize_electron(event=None):
+    global electron_hwnd
+    if user32 and electron_hwnd:
+        try:
+            w = frame_embed.winfo_width()
+            h = frame_embed.winfo_height()
+            user32.MoveWindow(electron_hwnd, 0, 0, w, h, True)
+        except Exception:
+            pass
+
+def embed_electron_window(hwnd):
+    global lbl_loading, electron_hwnd
+    electron_hwnd = hwnd
+    try:
+        lbl_loading.pack_forget()
+    except Exception:
+        pass
+    
+    try:
+        # Xóa thanh tiêu đề và nút điều khiển
+        style = user32.GetWindowLongW(hwnd, GWL_STYLE)
+        style &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)
+        style |= WS_CHILD
+        user32.SetWindowLongW(hwnd, GWL_STYLE, style)
+        
+        # Nhúng vào frame_embed
+        parent_hwnd = frame_embed.winfo_id()
+        user32.SetParent(hwnd, parent_hwnd)
+        
+        # Thiết lập kích thước ban đầu
+        resize_electron()
+        user32.SetWindowPos(hwnd, 0, 0, 0, frame_embed.winfo_width(), frame_embed.winfo_height(), SWP_NOZORDER | SWP_FRAMECHANGED)
+    except Exception as e:
+        log_message(f"❌ Lỗi khi nhúng cửa sổ: {e}")
+
+def launch_signature_cropper():
+    global electron_process, electron_hwnd, is_launching
+
+    if electron_hwnd and user32 and user32.IsWindow(electron_hwnd):
+        resize_electron()
+        return
+
+    if is_launching:
+        return
+
+    candidates = [
+        os.path.join(APP_DIR, "AddChuKy"),
+        os.path.join(os.path.dirname(APP_DIR), "AddChuKy"),
+    ]
+    if getattr(sys, "_MEIPASS", None):
+        candidates.append(os.path.join(sys._MEIPASS, "AddChuKy"))
+    add_chuky_dir = None
+    for cand in candidates:
+        if os.path.exists(cand):
+            add_chuky_dir = cand
+            break
+    if not add_chuky_dir:
+        add_chuky_dir = candidates[0]
+
+    if not os.path.exists(add_chuky_dir):
+        messagebox.showerror(
+            "Không tìm thấy thư mục",
+            f"Không tìm thấy thư mục 'AddChuKy' tại:\n{add_chuky_dir}"
+        )
+        return
+
+    is_launching = True
+    
+    try:
+        lbl_loading.pack(pady=50)
+        lbl_loading.config(text="Đang khởi chạy Signature Cropper...")
+    except Exception:
+        pass
+
+    exe_path = os.path.join(
+        add_chuky_dir,
+        "release",
+        "Tool Cut Image-win32-x64",
+        "Tool Cut Image.exe"
+    )
+
+    try:
+        if os.path.exists(exe_path):
+            log_message("🖋️ Khởi chạy Signature Cropper (bản đóng gói)...")
+            electron_process = subprocess.Popen([exe_path])
+        else:
+            log_message("🖋️ Khởi chạy Signature Cropper (bản dev)...")
+            if sys.platform.startswith('win'):
+                electron_process = subprocess.Popen("npm run electron:dev", shell=True, cwd=add_chuky_dir)
+            else:
+                electron_process = subprocess.Popen(["npm", "run", "electron:dev"], cwd=add_chuky_dir)
+    except Exception as e:
+        is_launching = False
+        messagebox.showerror("Lỗi khởi chạy", f"Không thể khởi chạy:\n{e}")
+        return
+
+    def poll_hwnd(retries=0):
+        global electron_hwnd, is_launching
+        if retries > 60:
+            is_launching = False
+            try:
+                lbl_loading.config(text="⚠️ Khởi chạy quá giờ hoặc lỗi. Hãy thử chuyển lại tab.")
+            except Exception:
+                pass
+            return
+        
+        hwnd = find_hwnd_by_title("Signature Cropper")
+        if hwnd:
+            embed_electron_window(hwnd)
+            is_launching = False
+        else:
+            app.after(200, lambda: poll_hwnd(retries + 1))
+
+    app.after(500, poll_hwnd)
+
+# ===================== UI =====================
+def create_modern_button(parent, text, bg, hover_bg, command, fg="#ffffff", font_size=10, font_weight="bold"):
+    btn = tk.Button(parent, text=text, bg=bg, fg=fg, activebackground=hover_bg, 
+                    activeforeground=fg, relief="flat", bd=0, 
+                    font=("Segoe UI", font_size, font_weight), cursor="hand2",
+                    disabledforeground="#71717a")
+    btn.bind("<Enter>", lambda e: btn.config(bg=hover_bg, cursor="hand2") if btn.cget("state") == "normal" else btn.config(cursor="arrow"))
+    btn.bind("<Leave>", lambda e: btn.config(bg=bg) if btn.cget("state") == "normal" else None)
+    btn.config(command=command)
+    return btn
+
+app = tk.Tk()
+app.title(f"Auto Reset DB Tool v{CURRENT_VERSION}")
+app.geometry("1200x800")
+app.configure(bg="#121214")
+
+# Icon cửa sổ (tuỳ chọn)
+try:
+    app.iconbitmap("server.ico")
+except Exception as e:
+    print("⚠️ Không thể đặt icon:", e)
+
+# Cấu hình thanh điều hướng trên cùng (Custom Navigation Bar)
+frame_navbar = tk.Frame(app, bg="#1a1a24", height=45)
+frame_navbar.pack(fill="x", side="top")
+frame_navbar.pack_propagate(False)
+
+# Nút thông báo cập nhật phần mềm (hiển thị khi có bản mới)
+btn_update_notify = tk.Button(
+    frame_navbar, text="", bg="#1a1a24", fg="#ef4444", 
+    activebackground="#27272a", activeforeground="#dc2626",
+    relief="flat", bd=0, font=("Segoe UI", 10, "bold"), cursor="hand2", padx=15
+)
+btn_update_notify.bind("<Enter>", lambda e: btn_update_notify.config(bg="#27272a"))
+btn_update_notify.bind("<Leave>", lambda e: btn_update_notify.config(bg="#1a1a24"))
+
+# Đường kẻ phân tách mỏng
+divider = tk.Frame(app, bg="#2d2d3a", height=1)
+divider.pack(fill="x", side="top")
+
+# Khung chứa nội dung chính
+frame_content = tk.Frame(app, bg="#121214")
+frame_content.pack(fill="both", expand=True)
+
+# Tab 1: Reset Connect
+tab_reset = tk.Frame(frame_content, bg="#121214")
+tab_reset.pack(fill="both", expand=True)
+
+# Tab 2: Signature Cropper
+tab_signature = tk.Frame(frame_content, bg="#121214")
+
+# Khung chứa nhúng cho Tab 2
+frame_embed = tk.Frame(tab_signature, bg="#121214")
+frame_embed.pack(fill="both", expand=True)
+frame_embed.bind("<Configure>", resize_electron)
+
+lbl_loading = tk.Label(frame_embed, text="Đang khởi chạy Signature Cropper...", fg="#6366f1", bg="#121214", font=("Segoe UI", 12, "bold"))
+
+# Nút tab điều khiển
+btn_tab_reset = tk.Button(frame_navbar, text="🔌 Reset Connect", 
+                          bg="#6366f1", fg="#ffffff", activebackground="#4f46e5", activeforeground="#ffffff",
+                          relief="flat", bd=0, font=("Segoe UI", 10, "bold"), cursor="hand2", padx=20)
+btn_tab_reset.pack(side="left", fill="y")
+
+btn_tab_sig = tk.Button(frame_navbar, text="🖋️ Signature Cropper", 
+                        bg="#1a1a24", fg="#a1a1aa", activebackground="#27272a", activeforeground="#ffffff",
+                        relief="flat", bd=0, font=("Segoe UI", 10, "bold"), cursor="hand2", padx=20)
+btn_tab_sig.pack(side="left", fill="y")
+
+def refresh_tab_headers(active_tab):
+    if active_tab == 0:
+        btn_tab_reset.config(bg="#6366f1", fg="#ffffff")
+        btn_tab_reset.bind("<Enter>", lambda e: None)
+        btn_tab_reset.bind("<Leave>", lambda e: None)
+        
+        btn_tab_sig.config(bg="#1a1a24", fg="#a1a1aa")
+        btn_tab_sig.bind("<Enter>", lambda e: btn_tab_sig.config(bg="#27272a", fg="#ffffff"))
+        btn_tab_sig.bind("<Leave>", lambda e: btn_tab_sig.config(bg="#1a1a24", fg="#a1a1aa"))
+    else:
+        btn_tab_sig.config(bg="#6366f1", fg="#ffffff")
+        btn_tab_sig.bind("<Enter>", lambda e: None)
+        btn_tab_sig.bind("<Leave>", lambda e: None)
+        
+        btn_tab_reset.config(bg="#1a1a24", fg="#a1a1aa")
+        btn_tab_reset.bind("<Enter>", lambda e: btn_tab_reset.config(bg="#27272a", fg="#ffffff"))
+        btn_tab_reset.bind("<Leave>", lambda e: btn_tab_reset.config(bg="#1a1a24", fg="#a1a1aa"))
+
+def switch_tab(tab_index):
+    if tab_index == 0:
+        refresh_tab_headers(0)
+        tab_signature.pack_forget()
+        tab_reset.pack(fill="both", expand=True)
+    else:
+        refresh_tab_headers(1)
+        tab_reset.pack_forget()
+        tab_signature.pack(fill="both", expand=True)
+        if not electron_hwnd and not is_launching:
+            launch_signature_cropper()
+        elif electron_hwnd:
+            resize_electron()
+
+# Gán sự kiện click cho các Tab button
+btn_tab_reset.config(command=lambda: switch_tab(0))
+btn_tab_sig.config(command=lambda: switch_tab(1))
+
+# Thiết lập hover mặc định cho tab inactive ban đầu
+refresh_tab_headers(0)
+
+# Cấu hình grid cho Tab Reset
+tab_reset.columnconfigure(0, weight=1)
+tab_reset.columnconfigure(1, weight=1)
+tab_reset.rowconfigure(0, weight=1)
+tab_reset.rowconfigure(2, weight=1)
+
+# LEFT FORM (CARD)
+frame_left = tk.Frame(tab_reset, bg="#1a1a24", padx=20, pady=15, highlightthickness=1, highlightbackground="#2d2d3a")
+frame_left.grid(row=0, column=0, padx=15, pady=15, sticky="nsew")
+
+# Row 0: Labels Host and Port
+lbl_host = tk.Label(frame_left, text="Host DB:", bg="#1a1a24", fg="#a1a1aa", font=("Segoe UI", 9, "bold"), anchor="w")
+lbl_host.grid(row=0, column=0, sticky="w", pady=(6, 2), padx=(0, 5))
+lbl_port = tk.Label(frame_left, text="Port DB:", bg="#1a1a24", fg="#a1a1aa", font=("Segoe UI", 9, "bold"), anchor="w")
+lbl_port.grid(row=0, column=1, sticky="w", pady=(6, 2), padx=(5, 0))
+
+# Row 1: Entries Host and Port
+entry_host = tk.Entry(frame_left, bg="#27272a", fg="#ffffff", insertbackground="#ffffff", 
+                      readonlybackground="#27272a", disabledbackground="#1a1a24",
+                      highlightthickness=1, highlightbackground="#3f3f46", highlightcolor="#6366f1", 
+                      relief="flat", font=("Segoe UI", 10), width=18)
+entry_host.grid(row=1, column=0, sticky="we", pady=(0, 6), padx=(0, 5), ipady=3)
+
+entry_port = tk.Entry(frame_left, bg="#27272a", fg="#ffffff", insertbackground="#ffffff", 
+                      readonlybackground="#27272a", disabledbackground="#1a1a24",
+                      highlightthickness=1, highlightbackground="#3f3f46", highlightcolor="#6366f1", 
+                      relief="flat", font=("Segoe UI", 10), width=18)
+entry_port.grid(row=1, column=1, sticky="we", pady=(0, 6), padx=(5, 0), ipady=3)
+
+# Row 2: Labels Database and User
+lbl_db = tk.Label(frame_left, text="Database name:", bg="#1a1a24", fg="#a1a1aa", font=("Segoe UI", 9, "bold"), anchor="w")
+lbl_db.grid(row=2, column=0, sticky="w", pady=(6, 2), padx=(0, 5))
+lbl_user = tk.Label(frame_left, text="User DB:", bg="#1a1a24", fg="#a1a1aa", font=("Segoe UI", 9, "bold"), anchor="w")
+lbl_user.grid(row=2, column=1, sticky="w", pady=(6, 2), padx=(5, 0))
+
+# Row 3: Entries Database and User
+entry_db = tk.Entry(frame_left, bg="#27272a", fg="#ffffff", insertbackground="#ffffff", 
+                     readonlybackground="#27272a", disabledbackground="#1a1a24",
+                     highlightthickness=1, highlightbackground="#3f3f46", highlightcolor="#6366f1", 
+                     relief="flat", font=("Segoe UI", 10), width=18)
+entry_db.grid(row=3, column=0, sticky="we", pady=(0, 6), padx=(0, 5), ipady=3)
+
+entry_user = tk.Entry(frame_left, bg="#27272a", fg="#ffffff", insertbackground="#ffffff", 
+                      readonlybackground="#27272a", disabledbackground="#1a1a24",
+                      highlightthickness=1, highlightbackground="#3f3f46", highlightcolor="#6366f1", 
+                      relief="flat", font=("Segoe UI", 10), width=18)
+entry_user.grid(row=3, column=1, sticky="we", pady=(0, 6), padx=(5, 0), ipady=3)
+
+# Row 4: Labels Password and Server name
+lbl_pass = tk.Label(frame_left, text="Password DB:", bg="#1a1a24", fg="#a1a1aa", font=("Segoe UI", 9, "bold"), anchor="w")
+lbl_pass.grid(row=4, column=0, sticky="w", pady=(6, 2), padx=(0, 5))
+lbl_server = tk.Label(frame_left, text="Server name (Tên cấu hình):", bg="#1a1a24", fg="#a1a1aa", font=("Segoe UI", 9, "bold"), anchor="w")
+lbl_server.grid(row=4, column=1, sticky="w", pady=(6, 2), padx=(5, 0))
+
+# Row 5: Entries Password and Server name
+entry_pass = tk.Entry(frame_left, show="*", bg="#27272a", fg="#ffffff", insertbackground="#ffffff", 
+                      readonlybackground="#27272a", disabledbackground="#1a1a24",
+                      highlightthickness=1, highlightbackground="#3f3f46", highlightcolor="#6366f1", 
+                      relief="flat", font=("Segoe UI", 10), width=18)
+entry_pass.grid(row=5, column=0, sticky="we", pady=(0, 6), padx=(0, 5), ipady=3)
+
+entry_server = tk.Entry(frame_left, bg="#27272a", fg="#ffffff", insertbackground="#ffffff", 
+                        readonlybackground="#27272a", disabledbackground="#1a1a24",
+                        highlightthickness=1, highlightbackground="#3f3f46", highlightcolor="#6366f1", 
+                        relief="flat", font=("Segoe UI", 10), width=18)
+entry_server.grid(row=5, column=1, sticky="we", pady=(0, 6), padx=(5, 0), ipady=3)
+
+# Expand columns equally
+frame_left.columnconfigure(0, weight=1)
+frame_left.columnconfigure(1, weight=1)
+
+# Khởi tạo placeholder mặc định
+set_placeholder(entry_host, "localhost hoặc 192.168.x.x")
+set_placeholder(entry_port, "7001,6688")
+set_placeholder(entry_db, "Nhập tên database")
+entry_user.insert(0, "postgres")
+set_placeholder(entry_server, "servername")
+
+# Cấu hình Style cho Combobox của ttk
+style = ttk.Style()
+style.theme_use('clam')
+style.configure("TCombobox", fieldbackground="#27272a", background="#3f3f46", foreground="#ffffff", bordercolor="#3f3f46")
+style.map("TCombobox", 
+          fieldbackground=[("readonly", "#27272a"), ("disabled", "#1a1a24")],
+          foreground=[("readonly", "#ffffff"), ("disabled", "#71717a")],
+          background=[("readonly", "#3f3f46"), ("disabled", "#27272a")],
+          bordercolor=[("readonly", "#3f3f46"), ("disabled", "#2d2d3a")])
+app.option_add("*TCombobox*Listbox.background", "#27272a")
+app.option_add("*TCombobox*Listbox.foreground", "#ffffff")
+app.option_add("*TCombobox*Listbox.selectBackground", "#6366f1")
+app.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
+
+# Khung nhập thời gian lặp (Row 6)
+frame_interval = tk.Frame(frame_left, bg="#1a1a24", pady=5)
+frame_interval.grid(row=6, column=0, columnspan=2, sticky="we", pady=(8, 2))
+
+lbl_interval = tk.Label(frame_interval, text="Tự động lặp lại mỗi:", bg="#1a1a24", fg="#a1a1aa", font=("Segoe UI", 9, "bold"))
+lbl_interval.pack(side="left", padx=(0, 5))
+
+entry_interval = tk.Entry(frame_interval, bg="#27272a", fg="#ffffff", insertbackground="#ffffff", 
+                          readonlybackground="#27272a", disabledbackground="#1a1a24",
+                          highlightthickness=1, highlightbackground="#3f3f46", highlightcolor="#6366f1", 
+                          relief="flat", font=("Segoe UI", 10), width=6, justify="center")
+entry_interval.pack(side="left", padx=5, ipady=1)
+entry_interval.insert(0, "1")
+
+combo_unit = ttk.Combobox(frame_interval, values=["Giờ", "Phút", "Giây"], width=6, state="readonly")
+combo_unit.pack(side="left", padx=5)
+combo_unit.set("Giờ")
+
+# Bố cục nút bấm cho LEFT FORM
+frame_form_buttons = tk.Frame(frame_left, bg="#1a1a24", pady=5)
+frame_form_buttons.grid(row=7, column=0, columnspan=2, sticky="we")
+frame_form_buttons.columnconfigure(0, weight=1)
+frame_form_buttons.columnconfigure(1, weight=1)
+
+btn_refresh = create_modern_button(frame_form_buttons, "🔄 Làm mới", "#4b5563", "#374151", clear_form)
+btn_refresh.grid(row=0, column=0, sticky="we", padx=4, pady=3, ipady=1)
+
+btn_save = create_modern_button(frame_form_buttons, "💾 Lưu cấu hình", "#3b82f6", "#2563eb", add_new_config)
+btn_save.grid(row=0, column=1, sticky="we", padx=4, pady=3, ipady=1)
+
+btn_test = create_modern_button(frame_form_buttons, "🔌 Test kết nối", "#06b6d4", "#0891b2", test_connection)
+btn_test.grid(row=1, column=0, sticky="we", padx=4, pady=3, ipady=1)
+
+btn_reset = create_modern_button(frame_form_buttons, "⚡ Reset ngay", "#f59e0b", "#d97706", lambda: reset_connection(True))
+btn_reset.grid(row=1, column=1, sticky="we", padx=4, pady=3, ipady=1)
+
+btn_auto = create_modern_button(frame_form_buttons, "▶️ Auto Reset", "#10b981", "#059669", start_auto_reset)
+btn_auto.grid(row=2, column=0, sticky="we", padx=4, pady=3, ipady=1)
+
+btn_stop = create_modern_button(frame_form_buttons, "🛑 Dừng", "#27272a", "#dc2626", stop_auto_reset)
+btn_stop.grid(row=2, column=1, sticky="we", padx=4, pady=3, ipady=1)
+btn_stop.config(state="disabled", cursor="arrow")
+
+btn_signature = create_modern_button(frame_form_buttons, "🖋️ Signature Cropper", "#6366f1", "#4f46e5", lambda: switch_tab(1))
+btn_signature.grid(row=3, column=0, columnspan=2, sticky="we", padx=4, pady=3, ipady=1)
+
+# RIGHT LIST (CARD)
+frame_right = tk.Frame(tab_reset, bg="#1a1a24", padx=25, pady=20, highlightthickness=1, highlightbackground="#2d2d3a")
+frame_right.grid(row=0, column=1, padx=15, pady=15, sticky="nsew")
+
+lbl_right_title = tk.Label(frame_right, text="Danh sách cấu hình:", bg="#1a1a24", fg="#f4f4f5", font=("Segoe UI", 11, "bold"), anchor="w")
+lbl_right_title.pack(anchor="w", pady=(0, 10))
+
+canvas = Canvas(frame_right, height=220, width=280, bg="#27272a", highlightthickness=0)
+scrollbar = tk.Scrollbar(frame_right, orient="vertical", command=canvas.yview, troughcolor="#1a1a24", bg="#27272a")
+scroll_frame = tk.Frame(canvas, bg="#27272a")
+scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+canvas.configure(yscrollcommand=scrollbar.set)
+canvas.pack(side="left", fill="both", expand=True)
+scrollbar.pack(side="right", fill="y")
+
+selected_config = tk.StringVar()
+def hide_action_buttons(): pass
+def show_action_buttons(): pass
+
+# LOG UI (TERMINAL LOG)
+lbl_log_title = tk.Label(tab_reset, text="Log hoạt động:", bg="#121214", fg="#f4f4f5", font=("Segoe UI", 11, "bold"), anchor="w")
+lbl_log_title.grid(row=1, column=0, columnspan=2, padx=15, pady=(15, 5), sticky="w")
+
+log_area = scrolledtext.ScrolledText(tab_reset, width=120, height=8, bg="#09090b", fg="#22c55e", 
+                                     insertbackground="#ffffff", font=("Consolas", 10), 
+                                     relief="flat", highlightthickness=1, highlightbackground="#2d2d3a")
+log_area.grid(row=2, column=0, columnspan=2, padx=15, pady=(0, 15), sticky="nsew")
+
+log_menu = Menu(tab_reset, tearoff=0)
+log_menu.add_command(label="🧹 Xóa log hiển thị", command=clear_log_display)
+log_area.bind("<Button-3>", lambda e: log_menu.tk_popup(e.x_root, e.y_root))
+
+def on_app_close():
+    global electron_process
+    if electron_process:
+        try:
+            electron_process.terminate()
+        except Exception:
+            pass
+    app.destroy()
+
+app.protocol("WM_DELETE_WINDOW", on_app_close)
+
+# INIT
+load_config_cache()
+refresh_data_list()
+flush_update_buffer_to_ui()
+refresh_title_from_local_version(app)
+app.mainloop()

@@ -177,30 +177,17 @@ def download_and_replace(remote_ver, auto_restart=False):
         is_frozen = getattr(sys, "frozen", False)
         
         if is_frozen:
-            rel = "AutoResetConn.py"
-            url = FILES_TO_UPDATE[rel]
-            log_update(f"⏬ Tải {rel} (mã hóa bảo mật) từ {url}", is_ui=False, is_file=True)
-            r = requests.get(url, timeout=15)
+            # Chạy từ bản .exe đóng gói -> Tải trực tiếp file mã hóa AutoResetConn.dat bảo mật từ server
+            dat_url = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/dist/AutoResetConn.dat"
+            log_update("⏬ Tải bản cập nhật mã hóa bảo mật từ server...", is_ui=False, is_file=True)
+            r = requests.get(dat_url, timeout=15)
             if r.status_code == 200:
-                key = None
-                key_path = os.path.join(APP_DIR, "secret.key")
-                if os.path.exists(key_path):
-                    with open(key_path, "rb") as f:
-                        key = f.read()
-                else:
-                    key = Fernet.generate_key()
-                    with open(key_path, "wb") as f:
-                        f.write(key)
-                
-                if key:
-                    cipher = Fernet(key)
-                    encrypted_data = cipher.encrypt(r.text.encode('utf-8'))
-                    dat_path = os.path.join(APP_DIR, "AutoResetConn.dat")
-                    with open(dat_path, "wb") as f:
-                        f.write(encrypted_data)
-                    log_update("✅ Đã cập nhật bản mã hóa bảo mật: AutoResetConn.dat", is_ui=False, is_file=True)
+                dat_path = os.path.join(APP_DIR, "AutoResetConn.dat")
+                with open(dat_path, "wb") as f:
+                    f.write(r.content)
+                log_update("✅ Đã cập nhật thành công file mã hóa: AutoResetConn.dat", is_ui=False, is_file=True)
             else:
-                log_update(f"❌ Không tải được {url} (status={r.status_code})", is_ui=True, is_file=True)
+                log_update(f"❌ Không tải được bản cập nhật (status={r.status_code})", is_ui=True, is_file=True)
                 return
         else:
             for rel, url in FILES_TO_UPDATE.items():
@@ -249,10 +236,8 @@ def restart_app():
 
         vbs_path = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
         bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
-        creationflags = 0x08000000 if sys.platform.startswith('win') else 0
 
         # Xóa duy nhất _MEIPASS2 và _MEIPASS khỏi env để PyInstaller không dùng lại folder tạm cũ của tiến trình cha
-        # Giữ nguyên biến PATH để _tkinter nạp DLL bình thường
         env = os.environ.copy()
         env.pop("_MEIPASS2", None)
         env.pop("_MEIPASS", None)
@@ -263,16 +248,17 @@ def restart_app():
             import tempfile
             restart_bat = os.path.join(tempfile.gettempdir(), f"restart_tool_{os.getpid()}.bat")
             with open(restart_bat, "w", encoding="utf-8") as f:
-                f.write(f'@echo off\ntimeout /t 1 /nobreak > nul\nstart "" "{exe_path}"\ndel "%~f0"\n')
-            subprocess.Popen(["cmd.exe", "/c", restart_bat], cwd=APP_DIR, env=env, creationflags=creationflags)
+                f.write(f'@echo off\ntimeout /t 2 /nobreak > nul\nstart "" "{exe_path}"\ndel "%~f0"\n')
+            # 0x08000008 = CREATE_NO_WINDOW (0x08000000) | DETACHED_PROCESS (0x00000008)
+            subprocess.Popen(["cmd.exe", "/c", restart_bat], cwd=APP_DIR, env=env, creationflags=0x08000008, close_fds=True)
         elif os.path.exists(vbs_path):
-            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, env=env, creationflags=creationflags)
+            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, env=env, creationflags=0x08000000)
         elif os.path.exists(bat_path):
-            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, env=env, creationflags=creationflags)
+            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, env=env, creationflags=0x08000000)
         else:
             subprocess.Popen(
                 ["uv", "run", "--with", "requests", "--with", "psycopg2-binary", "--with", "cryptography", "AutoResetConn.py"],
-                cwd=APP_DIR, env=env, creationflags=creationflags
+                cwd=APP_DIR, env=env, creationflags=0x08000000
             )
     except Exception as e:
         print("❌ Lỗi khi restart_app:", e)
