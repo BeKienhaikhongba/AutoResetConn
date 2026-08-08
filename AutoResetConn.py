@@ -164,26 +164,23 @@ def log_update(msg):
     print(line)
     _buf(line)
 
-def download_and_replace(remote_ver, auto_restart=False):
+def download_and_replace(remote_ver, auto_restart=False, silent=False):
     global CURRENT_VERSION
     try:
         is_frozen = getattr(sys, "frozen", False)
         
         if is_frozen:
-            # Chạy từ file .exe -> chỉ tải AutoResetConn.py và lưu dưới dạng mã hóa AutoResetConn.dat
             rel = "AutoResetConn.py"
             url = FILES_TO_UPDATE[rel]
             log_update(f"⏬ Tải {rel} (mã hóa bảo mật) từ {url}")
             r = requests.get(url, timeout=15)
             if r.status_code == 200:
-                # Mã hóa bằng key
                 key = None
                 key_path = os.path.join(APP_DIR, "secret.key")
                 if os.path.exists(key_path):
                     with open(key_path, "rb") as f:
                         key = f.read()
                 else:
-                    # Nếu chưa có key thì tạo mới
                     key = Fernet.generate_key()
                     with open(key_path, "wb") as f:
                         f.write(key)
@@ -199,7 +196,6 @@ def download_and_replace(remote_ver, auto_restart=False):
                 log_update(f"❌ Không tải được {url} (status={r.status_code})")
                 return
         else:
-            # Chạy từ file script .py bình thường -> tải và ghi đè như cũ
             for rel, url in FILES_TO_UPDATE.items():
                 dst = os.path.join(APP_DIR, rel)
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -218,33 +214,9 @@ def download_and_replace(remote_ver, auto_restart=False):
         CURRENT_VERSION = remote_ver
 
         if auto_restart:
-            try:
-                import tkinter as tk
-                from tkinter import messagebox
-                root = tk.Tk()
-                root.withdraw()
-                messagebox.showinfo(
-                    "Cập nhật hoàn tất",
-                    f"Đã tự động tải thành công phiên bản mới v{remote_ver}!\n\n"
-                    "👉 Click OK để tự động khởi động lại ứng dụng."
-                )
-                root.destroy()
-            except Exception:
-                pass
             log_update("🔁 Khởi động lại để áp dụng cập nhật...")
-            time.sleep(1)
-            os.execl(sys.executable, sys.executable, *sys.argv)
-        else:
-            if 'app' in globals() and app:
-                try:
-                    app.after(0, lambda: refresh_title_from_local_version(app))
-                    app.after(0, lambda: messagebox.showinfo(
-                        "Cập nhật hoàn tất",
-                        f"Đã tự động tải thành công phiên bản mới v{remote_ver}!\n\n"
-                        "👉 Vui lòng khởi động lại ứng dụng để áp dụng thay đổi."
-                    ))
-                except Exception:
-                    pass
+            time.sleep(0.5)
+            restart_app()
 
     except Exception as e:
         log_update(f"❌ Lỗi khi cập nhật: {e}")
@@ -259,18 +231,72 @@ def is_remote_newer(local_ver, remote_ver):
     except Exception:
         return remote_ver != local_ver
 
-def confirm_and_download_update(remote_ver):
-    if messagebox.askyesno(
-        "Cập nhật phần mềm",
-        f"Bạn có muốn tải và cập nhật ứng dụng lên phiên bản mới nhất v{remote_ver} không?\n\n👉 Ứng dụng sẽ tự động tải dữ liệu và khởi động lại."
-    ):
+def restart_app():
+    try:
+        os.execl(sys.executable, sys.executable, *sys.argv)
+    except Exception:
+        sys.exit(0)
+
+def show_update_loading_window(remote_ver):
+    """Tạo cửa sổ Loading hiện đại thông báo đang tải bản mới, tự động khởi động lại khi hoàn tất."""
+    try:
+        win = tk.Toplevel(app)
+        win.title("Đang cập nhật phần mềm")
+        win.geometry("460x170")
+        win.configure(bg="#18181b")
+        win.resizable(False, False)
+        win.transient(app)
+        win.grab_set()
+
+        win.update_idletasks()
+        try:
+            x = app.winfo_x() + (app.winfo_width() // 2) - 230
+            y = app.winfo_y() + (app.winfo_height() // 2) - 85
+            win.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+        lbl_title = tk.Label(
+            win, 
+            text=f"🔄 ĐANG TẢI BẢN CẬP NHẬT (v{remote_ver})", 
+            fg="#6366f1", bg="#18181b", 
+            font=("Segoe UI", 11, "bold")
+        )
+        lbl_title.pack(pady=(22, 8))
+
+        lbl_status = tk.Label(
+            win, 
+            text="⏳ Đang tải dữ liệu bản mới từ server... Vui lòng chờ.", 
+            fg="#f4f4f5", bg="#18181b", 
+            font=("Segoe UI", 9)
+        )
+        lbl_status.pack(pady=4)
+
+        lbl_sub = tk.Label(
+            win, 
+            text="⚡ Ứng dụng sẽ tự động khởi động lại ngay sau khi tải xong.", 
+            fg="#71717a", bg="#18181b", 
+            font=("Segoe UI", 8, "italic")
+        )
+        lbl_sub.pack(pady=4)
+
+        def run_download_task():
+            try:
+                download_and_replace(remote_ver, auto_restart=False, silent=True)
+                win.after(0, lambda: lbl_status.config(text="✅ Cập nhật thành công! Đang khởi động lại...", fg="#10b981"))
+                win.after(0, lambda: lbl_title.config(text="🎉 CẬP NHẬT HOÀN TẤT!", fg="#10b981"))
+                win.after(500, lambda: restart_app())
+            except Exception as ex:
+                win.after(0, lambda: lbl_status.config(text=f"❌ Lỗi: {ex}", fg="#ef4444"))
+
+        threading.Thread(target=run_download_task, daemon=True).start()
+    except Exception as e:
         download_and_replace(remote_ver, auto_restart=True)
 
 def check_for_update(auto_restart=False, is_startup=True):
     global NEW_VERSION_AVAILABLE
     try:
         log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...")
-        # Thêm timestamp query buster để không bị dính Cache CDN 5-10 phút của GitHub
         req_url = f"{VERSION_URL}?t={int(time.time())}"
         r = requests.get(req_url, headers={"Cache-Control": "no-cache"}, timeout=7)
         if r.status_code != 200:
@@ -289,7 +315,7 @@ def check_for_update(auto_restart=False, is_startup=True):
                 if 'btn_update_notify' in globals() and btn_update_notify:
                     btn_update_notify.config(
                         text=f"⬇ Cập Nhật Phần Mềm ({remote_ver})",
-                        command=lambda: confirm_and_download_update(remote_ver)
+                        command=lambda: show_update_loading_window(remote_ver)
                     )
                     btn_update_notify.pack(side="right", fill="y", padx=15)
             except Exception:
@@ -297,17 +323,6 @@ def check_for_update(auto_restart=False, is_startup=True):
 
         if 'app' in globals() and app:
             app.after(0, show_navbar_update_button)
-
-        if not is_startup:
-            def prompt_in_app():
-                if messagebox.askyesno(
-                    "Phát hiện bản cập nhật mới",
-                    f"Đã có bản cập nhật mới (v{remote_ver})!\n\nBạn có muốn cập nhật ngay bây giờ không?"
-                ):
-                    download_and_replace(remote_ver, auto_restart=True)
-
-            if 'app' in globals() and app:
-                app.after(100, prompt_in_app)
 
     except Exception as e:
         log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}")
@@ -377,7 +392,7 @@ def flush_update_buffer_to_ui():
         try:
             btn_update_notify.config(
                 text=f"⬇ Cập Nhật Phần Mềm ({NEW_VERSION_AVAILABLE})",
-                command=lambda: confirm_and_download_update(NEW_VERSION_AVAILABLE)
+                command=lambda: show_update_loading_window(NEW_VERSION_AVAILABLE)
             )
             btn_update_notify.pack(side="right", fill="y", padx=15)
         except Exception:
