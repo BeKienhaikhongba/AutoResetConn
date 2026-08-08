@@ -305,10 +305,12 @@ def show_update_loading_window(remote_ver):
 
         def run_download_task():
             try:
-                download_and_replace(remote_ver, auto_restart=False, silent=True)
+                log_update(f"⏬ Bắt đầu tải bản cập nhật v{remote_ver}...")
+                download_and_replace(remote_ver, auto_restart=False)
                 win.after(10, restart_app)
             except Exception as ex:
-                win.after(0, lambda: lbl_status.config(text=f"❌ Lỗi: {ex}", fg="#ef4444"))
+                log_update(f"❌ Lỗi tải bản cập nhật: {ex}")
+                win.after(10, restart_app)
 
         threading.Thread(target=run_download_task, daemon=True).start()
     except Exception as e:
