@@ -256,7 +256,7 @@ def restart_app():
             import tempfile
             restart_bat = os.path.join(tempfile.gettempdir(), f"restart_tool_{os.getpid()}.bat")
             with open(restart_bat, "w", encoding="utf-8") as f:
-                f.write(f'@echo off\ntimeout /t 2 /nobreak > nul\nstart "" "{exe_path}"\ndel "%~f0"\n')
+                f.write(f'@echo off\nset _MEIPASS2=\nset _MEIPASS=\ntimeout /t 2 /nobreak > nul\nstart "" "{exe_path}"\ndel "%~f0"\n')
             # 0x08000008 = CREATE_NO_WINDOW (0x08000000) | DETACHED_PROCESS (0x00000008)
             subprocess.Popen(["cmd.exe", "/c", restart_bat], cwd=APP_DIR, env=env, creationflags=0x08000008, close_fds=True)
         elif os.path.exists(vbs_path):
