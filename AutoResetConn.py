@@ -373,6 +373,16 @@ def flush_update_buffer_to_ui():
             log_message(f"[AutoUpdate] {line}")
         _UPDATE_UI_BUFFER.clear()
 
+    if NEW_VERSION_AVAILABLE and 'btn_update_notify' in globals() and btn_update_notify:
+        try:
+            btn_update_notify.config(
+                text=f"⬇ Cập Nhật Phần Mềm ({NEW_VERSION_AVAILABLE})",
+                command=lambda: confirm_and_download_update(NEW_VERSION_AVAILABLE)
+            )
+            btn_update_notify.pack(side="right", fill="y", padx=15)
+        except Exception:
+            pass
+
 def refresh_title_from_local_version(app):
     """Sau khi UI sẵn sàng, đọc lại version_local để set title đúng (nếu vừa update)."""
     try:
