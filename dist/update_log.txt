@@ -124,3 +124,6 @@
 [2026-08-08 17:34:25] ✅ Đang dùng bản mới nhất.
 [2026-08-08 17:38:42] 🔍 Kiểm tra cập nhật (hiện tại: 2026.8.08.15)...
 [2026-08-08 17:38:43] ✅ Đang dùng bản mới nhất.
+[2026-08-08 17:47:24] 🔍 Kiểm tra cập nhật (hiện tại: 2026.8.08.18)...
+[2026-08-08 17:47:24] 🔔 Phát hiện bản mới trên server: v2026.8.08.19
+[2026-08-08 17:47:24] ⚠️ Lỗi hiển thị dialog cập nhật: expected integer but got "9.5"

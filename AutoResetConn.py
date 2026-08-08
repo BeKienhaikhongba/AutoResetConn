@@ -344,9 +344,13 @@ def show_update_prompt_dialog(remote_ver):
         if 'app' not in globals() or not app:
             return
 
+        # Ẩn nút Navbar (1) trong khi Popup (2) đang hiển thị
+        if 'btn_update_notify' in globals() and btn_update_notify:
+            btn_update_notify.pack_forget()
+
         win = tk.Toplevel(app)
         win.title("Thông báo cập nhật phần mềm")
-        win.geometry("480x210")
+        win.geometry("520x270")
         win.configure(bg="#18181b")
         win.resizable(False, False)
         win.transient(app)
@@ -354,50 +358,70 @@ def show_update_prompt_dialog(remote_ver):
 
         win.update_idletasks()
         try:
-            x = app.winfo_x() + (app.winfo_width() // 2) - 240
-            y = app.winfo_y() + (app.winfo_height() // 2) - 105
+            x = app.winfo_x() + (app.winfo_width() // 2) - 260
+            y = app.winfo_y() + (app.winfo_height() // 2) - 135
             win.geometry(f"+{x}+{y}")
         except Exception:
             pass
 
         lbl_icon = tk.Label(
             win, text="🚀 PHÁT HIỆN BẢN CẬP NHẬT MỚI", 
-            fg="#10b981", bg="#18181b", font=("Segoe UI", 12, "bold")
+            fg="#10b981", bg="#18181b", font=("Segoe UI", 13, "bold")
         )
-        lbl_icon.pack(pady=(18, 6))
+        lbl_icon.pack(pady=(22, 10))
 
         lbl_msg = tk.Label(
             win, 
-            text=f"Phiên bản v{remote_ver} mới nhất hiện đã có sẵn trên Server!\nBạn có muốn nâng cấp tự động và khởi động lại ngay không?",
-            fg="#f4f4f5", bg="#18181b", font=("Segoe UI", 9.5), justify="center", wraplength=440
+            text=f"Phiên bản v{remote_ver} mới nhất hiện đã có sẵn trên Server!\nBạn có muốn tiến hành nâng cấp tự động và khởi động lại ngay không?",
+            fg="#f4f4f5", bg="#18181b", font=("Segoe UI", 10), justify="center", wraplength=460
         )
-        lbl_msg.pack(pady=(0, 15))
+        lbl_msg.pack(pady=(0, 20))
 
         frame_btns = tk.Frame(win, bg="#18181b")
-        frame_btns.pack(pady=5)
+        frame_btns.pack(pady=10)
+
+        def show_navbar_btn():
+            try:
+                if 'btn_update_notify' in globals() and btn_update_notify:
+                    btn_update_notify.config(
+                        text=f"⬇ Cập Nhật Phần Mềm ({remote_ver})",
+                        command=lambda: show_update_loading_window(remote_ver)
+                    )
+                    btn_update_notify.pack(side="right", fill="y", padx=15)
+            except Exception:
+                pass
 
         def on_accept():
-            win.destroy()
+            try:
+                win.destroy()
+            except Exception:
+                pass
             show_update_loading_window(remote_ver)
 
         def on_later():
-            win.destroy()
+            try:
+                win.destroy()
+            except Exception:
+                pass
+            show_navbar_btn()
+
+        win.protocol("WM_DELETE_WINDOW", on_later)
 
         btn_upgrade = tk.Button(
             frame_btns, text="🚀 Nâng Cấp Ngay", bg="#6366f1", fg="#ffffff",
             activebackground="#4f46e5", activeforeground="#ffffff",
-            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", padx=15, pady=5,
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", padx=20, pady=7,
             command=on_accept
         )
-        btn_upgrade.pack(side="left", padx=10)
+        btn_upgrade.pack(side="left", padx=15)
 
         btn_later = tk.Button(
             frame_btns, text="⏳ Để Sau", bg="#27272a", fg="#a1a1aa",
             activebackground="#3f3f46", activeforeground="#ffffff",
-            relief="flat", font=("Segoe UI", 10), cursor="hand2", padx=15, pady=5,
+            relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", padx=20, pady=7,
             command=on_later
         )
-        btn_later.pack(side="left", padx=10)
+        btn_later.pack(side="left", padx=15)
 
     except Exception as e:
         log_update(f"⚠️ Lỗi hiển thị dialog cập nhật: {e}", is_ui=False, is_file=True)
@@ -437,20 +461,8 @@ def check_for_update(auto_restart=False, is_startup=True):
         NEW_VERSION_AVAILABLE = remote_ver
         log_update(f"🔔 Phát hiện bản mới trên server: v{remote_ver}", is_ui=True, is_file=True)
 
-        def show_navbar_update_button():
-            try:
-                if 'btn_update_notify' in globals() and btn_update_notify:
-                    btn_update_notify.config(
-                        text=f"⬇ Cập Nhật Phần Mềm ({remote_ver})",
-                        command=lambda: show_update_loading_window(remote_ver)
-                    )
-                    btn_update_notify.pack(side="right", fill="y", padx=15)
-                show_update_prompt_dialog(remote_ver)
-            except Exception:
-                pass
-
         if 'app' in globals() and app:
-            app.after(0, show_navbar_update_button)
+            app.after(0, lambda: show_update_prompt_dialog(remote_ver))
 
     except Exception as e:
         log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}", is_ui=False, is_file=True)
