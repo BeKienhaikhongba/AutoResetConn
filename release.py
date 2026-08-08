@@ -54,9 +54,9 @@ def create_offline_packages(next_ver):
 
     # Bảo mật: Không đóng gói file .py mã nguồn gốc vào gói nén .rar
     files_to_pack = [
-        ("version.txt", os.path.join(APP_DIR, "version.txt")),
+        #("version.txt", os.path.join(APP_DIR, "version.txt")),
         # ("version_local.txt", os.path.join(APP_DIR, "version_local.txt")),
-        # ("AutoResetConn.dat", os.path.join(dist_dir, "AutoResetConn.dat")),
+        ("AutoResetConn.dat", os.path.join(dist_dir, "AutoResetConn.dat")),
         ("secret.key", os.path.join(dist_dir, "secret.key")),
         ("AutoResetConn.exe", os.path.join(dist_dir, "AutoResetConn.exe")),
     ]
