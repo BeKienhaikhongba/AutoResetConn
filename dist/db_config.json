@@ -1,0 +1,15 @@
+{
+  "configs": [
+    {
+      "name": "bvducgiang_local",
+      "host": "192.168.16.79",
+      "port": "6688",
+      "db": "bvducgiang",
+      "user": "postgres",
+      "password": "gAAAAABqdVYRVol_8YuubPZbCknGjXHv0R18YAvYf9eAklrn0xras_1hFwSmzSoIW1-n1XYbK5bSjdZsLHO7PooHHq4XoPByFQ==",
+      "interval_val": "1",
+      "interval_unit": "Giờ",
+      "created": "2026-08-07 10:50:41"
+    }
+  ]
+}
