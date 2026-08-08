@@ -251,6 +251,12 @@ def restart_app():
         bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
         creationflags = 0x08000000 if sys.platform.startswith('win') else 0
 
+        # Xóa duy nhất _MEIPASS2 và _MEIPASS khỏi env để PyInstaller không dùng lại folder tạm cũ của tiến trình cha
+        # Giữ nguyên biến PATH để _tkinter nạp DLL bình thường
+        env = os.environ.copy()
+        env.pop("_MEIPASS2", None)
+        env.pop("_MEIPASS", None)
+
         if getattr(sys, "frozen", False):
             # Nếu đang chạy từ file AutoResetConn.exe bản đóng gói single-file
             exe_path = sys.executable
@@ -258,15 +264,15 @@ def restart_app():
             restart_bat = os.path.join(tempfile.gettempdir(), f"restart_tool_{os.getpid()}.bat")
             with open(restart_bat, "w", encoding="utf-8") as f:
                 f.write(f'@echo off\ntimeout /t 1 /nobreak > nul\nstart "" "{exe_path}"\ndel "%~f0"\n')
-            subprocess.Popen(["cmd.exe", "/c", restart_bat], cwd=APP_DIR, creationflags=creationflags)
+            subprocess.Popen(["cmd.exe", "/c", restart_bat], cwd=APP_DIR, env=env, creationflags=creationflags)
         elif os.path.exists(vbs_path):
-            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, creationflags=creationflags)
+            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, env=env, creationflags=creationflags)
         elif os.path.exists(bat_path):
-            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, creationflags=creationflags)
+            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, env=env, creationflags=creationflags)
         else:
             subprocess.Popen(
                 ["uv", "run", "--with", "requests", "--with", "psycopg2-binary", "--with", "cryptography", "AutoResetConn.py"],
-                cwd=APP_DIR, creationflags=creationflags
+                cwd=APP_DIR, env=env, creationflags=creationflags
             )
     except Exception as e:
         print("❌ Lỗi khi restart_app:", e)
