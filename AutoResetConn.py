@@ -154,15 +154,22 @@ FILES_TO_UPDATE = {
 _UPDATE_UI_BUFFER = []
 def _buf(msg): _UPDATE_UI_BUFFER.append(msg)
 
-def log_update(msg):
+def log_update(msg, is_ui=True, is_file=True):
+    """
+    Tiêu chí ghi log:
+    - is_file=True: Ghi chi tiết đầy đủ (URLs, status, mã hóa, traceback) vào update_log.txt để tra cứu kỹ thuật.
+    - is_ui=True: Chỉ đẩy các thông điệp tóm tắt cần thiết lên màn hình ứng dụng.
+    """
     line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
-    try:
-        with open(UPDATE_LOG, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except Exception:
-        pass
-    print(line)
-    _buf(line)
+    if is_file:
+        try:
+            with open(UPDATE_LOG, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
+    if is_ui:
+        print(line)
+        _buf(line)
 
 def download_and_replace(remote_ver, auto_restart=False):
     global CURRENT_VERSION
@@ -170,20 +177,17 @@ def download_and_replace(remote_ver, auto_restart=False):
         is_frozen = getattr(sys, "frozen", False)
         
         if is_frozen:
-            # Chạy từ file .exe -> chỉ tải AutoResetConn.py và lưu dưới dạng mã hóa AutoResetConn.dat
             rel = "AutoResetConn.py"
             url = FILES_TO_UPDATE[rel]
-            log_update(f"⏬ Tải {rel} (mã hóa bảo mật) từ {url}")
+            log_update(f"⏬ Tải {rel} (mã hóa bảo mật) từ {url}", is_ui=False, is_file=True)
             r = requests.get(url, timeout=15)
             if r.status_code == 200:
-                # Mã hóa bằng key
                 key = None
                 key_path = os.path.join(APP_DIR, "secret.key")
                 if os.path.exists(key_path):
                     with open(key_path, "rb") as f:
                         key = f.read()
                 else:
-                    # Nếu chưa có key thì tạo mới
                     key = Fernet.generate_key()
                     with open(key_path, "wb") as f:
                         f.write(key)
@@ -194,36 +198,35 @@ def download_and_replace(remote_ver, auto_restart=False):
                     dat_path = os.path.join(APP_DIR, "AutoResetConn.dat")
                     with open(dat_path, "wb") as f:
                         f.write(encrypted_data)
-                    log_update("✅ Đã cập nhật bản mã hóa bảo mật: AutoResetConn.dat")
+                    log_update("✅ Đã cập nhật bản mã hóa bảo mật: AutoResetConn.dat", is_ui=False, is_file=True)
             else:
-                log_update(f"❌ Không tải được {url} (status={r.status_code})")
+                log_update(f"❌ Không tải được {url} (status={r.status_code})", is_ui=True, is_file=True)
                 return
         else:
-            # Chạy từ file script .py bình thường -> tải và ghi đè như cũ
             for rel, url in FILES_TO_UPDATE.items():
                 dst = os.path.join(APP_DIR, rel)
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
-                log_update(f"⏬ Tải {rel} từ {url}")
+                log_update(f"⏬ Tải {rel} từ {url}", is_ui=False, is_file=True)
                 r = requests.get(url, timeout=15)
                 if r.status_code != 200:
-                    log_update(f"❌ Không tải được {url} (status={r.status_code})")
+                    log_update(f"❌ Không tải được {url} (status={r.status_code})", is_ui=True, is_file=True)
                     continue
                 with open(dst, "w", encoding="utf-8") as f:
                     f.write(r.text)
-                log_update(f"✅ Cập nhật thành công: {rel}")
+                log_update(f"✅ Cập nhật thành công file: {rel}", is_ui=False, is_file=True)
 
         with open(os.path.join(APP_DIR, "version_local.txt"), "w", encoding="utf-8") as f:
             f.write(remote_ver)
-        log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}")
+        log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}", is_ui=True, is_file=True)
         CURRENT_VERSION = remote_ver
 
         if auto_restart:
-            log_update("🔁 Khởi động lại để áp dụng cập nhật...")
-            time.sleep(0.2)
+            log_update("🔁 Khởi động lại để áp dụng cập nhật...", is_ui=True, is_file=True)
+            time.sleep(0.1)
             restart_app()
 
     except Exception as e:
-        log_update(f"❌ Lỗi khi cập nhật: {e}")
+        log_update(f"❌ Lỗi khi cập nhật: {e}", is_ui=True, is_file=True)
 
 NEW_VERSION_AVAILABLE = None
 
@@ -236,7 +239,7 @@ def is_remote_newer(local_ver, remote_ver):
         return remote_ver != local_ver
 
 def restart_app():
-    """Thực thi khởi động lại ứng dụng 100% tin cậy trên Windows (hỗ trợ cả .exe và .py script)"""
+    """Thực thi khởi động lại ứng dụng 100% ẩn cửa sổ terminal trên Windows"""
     try:
         if 'app' in globals() and app:
             try:
@@ -244,20 +247,24 @@ def restart_app():
             except Exception:
                 pass
 
+        vbs_path = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
+        bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
+
+        creationflags = 0x08000000 if sys.platform.startswith('win') else 0
+
         if getattr(sys, "frozen", False):
             exe_path = sys.executable
-            cmd = [exe_path] + sys.argv[1:]
-            subprocess.Popen(cmd, cwd=APP_DIR, creationflags=0x08000000 if sys.platform.startswith('win') else 0)
+            subprocess.Popen([exe_path] + sys.argv[1:], cwd=APP_DIR, creationflags=creationflags)
+        elif os.path.exists(vbs_path):
+            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, creationflags=creationflags)
+        elif os.path.exists(bat_path):
+            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, creationflags=creationflags)
         else:
-            bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
-            if os.path.exists(bat_path):
-                subprocess.Popen(["cmd.exe", "/c", "start", "", bat_path], cwd=APP_DIR, shell=True)
-            else:
-                subprocess.Popen([sys.executable, os.path.join(APP_DIR, "AutoResetConn.py")], cwd=APP_DIR)
+            subprocess.Popen([sys.executable, os.path.join(APP_DIR, "AutoResetConn.py")], cwd=APP_DIR, creationflags=creationflags)
     except Exception as e:
         print("❌ Lỗi khi restart_app:", e)
     finally:
-        time.sleep(0.2)
+        time.sleep(0.1)
         os._exit(0)
 
 def show_update_loading_window(remote_ver):
@@ -305,33 +312,34 @@ def show_update_loading_window(remote_ver):
 
         def run_download_task():
             try:
-                log_update(f"⏬ Bắt đầu tải bản cập nhật v{remote_ver}...")
+                log_update(f"⏬ Bắt đầu tải bản cập nhật v{remote_ver}...", is_ui=False, is_file=True)
                 download_and_replace(remote_ver, auto_restart=False)
                 win.after(10, restart_app)
             except Exception as ex:
-                log_update(f"❌ Lỗi tải bản cập nhật: {ex}")
+                log_update(f"❌ Lỗi tải bản cập nhật: {ex}", is_ui=True, is_file=True)
                 win.after(10, restart_app)
 
         threading.Thread(target=run_download_task, daemon=True).start()
     except Exception as e:
+        log_update(f"❌ Lỗi mở cửa sổ loading: {e}", is_ui=True, is_file=True)
         download_and_replace(remote_ver, auto_restart=True)
 
 def check_for_update(auto_restart=False, is_startup=True):
     global NEW_VERSION_AVAILABLE
     try:
-        log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...")
+        log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...", is_ui=False, is_file=True)
         req_url = f"{VERSION_URL}?t={int(time.time())}"
         r = requests.get(req_url, headers={"Cache-Control": "no-cache"}, timeout=7)
         if r.status_code != 200:
-            log_update("⚠️ Không lấy được version từ server.")
+            log_update(f"⚠️ Không lấy được version từ server (status={r.status_code}).", is_ui=False, is_file=True)
             return
         remote_ver = r.text.strip()
         if not is_remote_newer(CURRENT_VERSION, remote_ver):
-            log_update("✅ Đang dùng bản mới nhất.")
+            log_update("✅ Đang dùng bản mới nhất.", is_ui=False, is_file=True)
             return
 
         NEW_VERSION_AVAILABLE = remote_ver
-        log_update(f"🔔 Phát hiện bản mới trên server: v{remote_ver}")
+        log_update(f"🔔 Phát hiện bản mới trên server: v{remote_ver}", is_ui=True, is_file=True)
 
         def show_navbar_update_button():
             try:
@@ -386,20 +394,25 @@ last_selected_name = ""
 def _log_file_today():
     return os.path.join(LOG_DIR, f"db_reset_{datetime.now():%Y%m%d}.txt")
 
-def log_message(msg):
-    # phần UI (được gắn sau khi UI tạo)
-    try:
-        log_area.insert(tk.END, msg + "\n")
-        log_area.yview(tk.END)
-    except Exception:
-        pass
-    # phần file
+def log_message(msg, is_ui=True, is_file=True):
+    """
+    Tiêu chí ghi log:
+    - is_file=True: Ghi log chi tiết (SQL query, connection details, traceback) vào file đĩa ngày.
+    - is_ui=True: Chỉ hiển thị các thông điệp tóm tắt cần thiết trên màn hình phần mềm.
+    """
     line = f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}"
-    try:
-        with open(_log_file_today(), "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except Exception:
-        pass
+    if is_ui:
+        try:
+            log_area.insert(tk.END, line + "\n")
+            log_area.yview(tk.END)
+        except Exception:
+            pass
+    if is_file:
+        try:
+            with open(_log_file_today(), "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            pass
 
 def clear_log_display():
     log_area.delete(1.0, tk.END)
