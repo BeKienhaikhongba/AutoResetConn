@@ -270,7 +270,9 @@ def check_for_update(auto_restart=False, is_startup=True):
     global NEW_VERSION_AVAILABLE
     try:
         log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...")
-        r = requests.get(VERSION_URL, timeout=7)
+        # Thêm timestamp query buster để không bị dính Cache CDN 5-10 phút của GitHub
+        req_url = f"{VERSION_URL}?t={int(time.time())}"
+        r = requests.get(req_url, headers={"Cache-Control": "no-cache"}, timeout=7)
         if r.status_code != 200:
             log_update("⚠️ Không lấy được version từ server.")
             return
