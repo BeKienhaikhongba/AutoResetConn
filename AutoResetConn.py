@@ -328,12 +328,30 @@ def check_for_update(auto_restart=False, is_startup=True):
     global NEW_VERSION_AVAILABLE
     try:
         log_update(f"🔍 Kiểm tra cập nhật (hiện tại: {CURRENT_VERSION})...", is_ui=False, is_file=True)
-        req_url = f"{VERSION_URL}?t={int(time.time())}"
-        r = requests.get(req_url, headers={"Cache-Control": "no-cache"}, timeout=7)
-        if r.status_code != 200:
-            log_update(f"⚠️ Không lấy được version từ server (status={r.status_code}).", is_ui=False, is_file=True)
+        remote_ver = None
+        
+        # 1. Ưu tiên dùng GitHub API để lấy version tức thì (bỏ qua CDN Cache 10 phút của raw URL)
+        try:
+            api_url = "https://api.github.com/repos/BeKienhaikhongba/AutoResetConn/contents/version.txt"
+            r = requests.get(api_url, headers={"Cache-Control": "no-cache", "User-Agent": "AutoResetConnApp"}, timeout=5)
+            if r.status_code == 200:
+                import base64
+                content = r.json().get("content", "")
+                remote_ver = base64.b64decode(content).decode("utf-8").strip()
+        except Exception as ex_api:
+            log_update(f"⚠️ Lỗi GitHub API, dùng fallback Raw URL: {ex_api}", is_ui=False, is_file=True)
+
+        # 2. Fallback nếu API bị nghẽn
+        if not remote_ver:
+            req_url = f"{VERSION_URL}?t={int(time.time())}"
+            r = requests.get(req_url, headers={"Cache-Control": "no-cache"}, timeout=7)
+            if r.status_code == 200:
+                remote_ver = r.text.strip()
+
+        if not remote_ver:
+            log_update("⚠️ Không lấy được version từ server.", is_ui=False, is_file=True)
             return
-        remote_ver = r.text.strip()
+
         if not is_remote_newer(CURRENT_VERSION, remote_ver):
             log_update("✅ Đang dùng bản mới nhất.", is_ui=False, is_file=True)
             return
@@ -356,7 +374,7 @@ def check_for_update(auto_restart=False, is_startup=True):
             app.after(0, show_navbar_update_button)
 
     except Exception as e:
-        log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}")
+        log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}", is_ui=False, is_file=True)
 
 # Gọi updater sớm (log sẽ buffer, UI lên sẽ flush)
 check_for_update(auto_restart=False, is_startup=True)
