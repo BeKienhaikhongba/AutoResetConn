@@ -76,3 +76,9 @@
 [2026-08-08 12:46:09] ⏬ Tải AutoResetConn.py (mã hóa bảo mật) từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py
 [2026-08-08 12:46:10] ✅ Đã cập nhật bản mã hóa bảo mật: AutoResetConn.dat
 [2026-08-08 12:46:10] 🎉 Hoàn tất cập nhật → phiên bản 2026.8.08.7
+[2026-08-08 12:48:31] 🔍 Kiểm tra cập nhật (hiện tại: 2026.8.08.7)...
+[2026-08-08 12:48:32] 🔔 Phát hiện bản mới trên server: v2026.8.08.8
+[2026-08-08 12:48:34] ⏬ Bắt đầu tải bản cập nhật v2026.8.08.8...
+[2026-08-08 12:48:34] ⏬ Tải AutoResetConn.py (mã hóa bảo mật) từ https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/AutoResetConn.py
+[2026-08-08 12:48:34] ✅ Đã cập nhật bản mã hóa bảo mật: AutoResetConn.dat
+[2026-08-08 12:48:34] 🎉 Hoàn tất cập nhật → phiên bản 2026.8.08.8
