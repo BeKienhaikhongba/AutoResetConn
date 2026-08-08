@@ -415,7 +415,7 @@ def flush_update_buffer_to_ui():
         try:
             btn_update_notify.config(
                 text=f"⬇ Cập Nhật Phần Mềm ({NEW_VERSION_AVAILABLE})",
-                command=lambda: confirm_and_download_update(NEW_VERSION_AVAILABLE)
+                command=lambda: show_update_loading_window(NEW_VERSION_AVAILABLE)
             )
             btn_update_notify.pack(side="right", fill="y", padx=15)
         except Exception:
