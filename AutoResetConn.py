@@ -480,20 +480,40 @@ def check_for_update(auto_restart=False, is_startup=True):
     except Exception as e:
         log_update(f"❌ Lỗi khi kiểm tra cập nhật: {e}", is_ui=False, is_file=True)
 
-# ===================== ENCRYPTION =====================
+# ===================== ENCRYPTION (HARDWARE BOUND PBKDF2-HMAC-SHA256) =====================
+def get_machine_guid():
+    try:
+        cmd = 'wmic csproduct get uuid'
+        uuid_str = subprocess.check_output(cmd, shell=True).decode().split('\n')[1].strip()
+        if uuid_str and len(uuid_str) > 10:
+            return uuid_str
+    except Exception:
+        pass
+    return "AutoResetConn_Default_Hardware_Secret_Key_2026"
+
 def load_or_create_key():
     try:
-        if not os.path.exists(SECRET_KEY_FILE):
-            key = Fernet.generate_key()
-            with open(SECRET_KEY_FILE, "wb") as f:
-                f.write(key)
-        else:
-            with open(SECRET_KEY_FILE, "rb") as f:
-                key = f.read()
+        import base64
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        from cryptography.hazmat.primitives import hashes
+        
+        hw_id = get_machine_guid()
+        salt = b'AutoResetConn_Salt_2026_EHC'
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(hw_id.encode('utf-8')))
         return Fernet(key)
     except Exception as e:
-        messagebox.showerror("Lỗi tạo key", str(e))
-        sys.exit(1)
+        if os.path.exists(SECRET_KEY_FILE):
+            with open(SECRET_KEY_FILE, "rb") as f:
+                key = f.read()
+            return Fernet(key)
+        key = Fernet.generate_key()
+        return Fernet(key)
 
 fernet = load_or_create_key()
 
