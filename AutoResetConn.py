@@ -238,6 +238,16 @@ def is_remote_newer(local_ver, remote_ver):
     except Exception:
         return remote_ver != local_ver
 
+def get_clean_env():
+    env = os.environ.copy()
+    env.pop("_MEIPASS2", None)
+    env.pop("_MEIPASS", None)
+    if "PATH" in env:
+        paths = env["PATH"].split(os.pathsep)
+        clean_paths = [p for p in paths if "_MEI" not in p]
+        env["PATH"] = os.pathsep.join(clean_paths)
+    return env
+
 def restart_app():
     """Thực thi khởi động lại ứng dụng 100% ẩn cửa sổ terminal trên Windows (hỗ trợ cả .exe và .py script)"""
     try:
@@ -250,26 +260,24 @@ def restart_app():
         vbs_path = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
         bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
         creationflags = 0x08000000 if sys.platform.startswith('win') else 0
-
-        # Xóa biến môi trường _MEIPASS để PyInstaller giải nén thư mục tạm _MEI mới hoàn toàn cho tiến trình con (.exe)
-        env = os.environ.copy()
-        env.pop("_MEIPASS2", None)
-        env.pop("_MEIPASS", None)
+        clean_env = get_clean_env()
 
         if getattr(sys, "frozen", False):
             # Nếu đang chạy từ file AutoResetConn.exe bản đóng gói single-file
             exe_path = sys.executable
-            # Dùng cmd timeout 1s để tiến trình .exe hiện tại kịp đóng hẳn và giải phóng thư mục %TEMP%\_MEI
-            cmd_str = f'timeout /t 1 /nobreak > nul && start "" "{exe_path}"'
-            subprocess.Popen(f'cmd.exe /c "{cmd_str}"', shell=True, cwd=APP_DIR, env=env, creationflags=creationflags)
+            import tempfile
+            restart_bat = os.path.join(tempfile.gettempdir(), f"restart_tool_{os.getpid()}.bat")
+            with open(restart_bat, "w", encoding="utf-8") as f:
+                f.write(f'@echo off\ntimeout /t 1 /nobreak > nul\nstart "" "{exe_path}"\ndel "%~f0"\n')
+            subprocess.Popen(["cmd.exe", "/c", restart_bat], cwd=APP_DIR, env=clean_env, creationflags=creationflags)
         elif os.path.exists(vbs_path):
-            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, env=env, creationflags=creationflags)
+            subprocess.Popen(["wscript.exe", vbs_path], cwd=APP_DIR, env=clean_env, creationflags=creationflags)
         elif os.path.exists(bat_path):
-            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, env=env, creationflags=creationflags)
+            subprocess.Popen(["cmd.exe", "/c", bat_path, "hidden"], cwd=APP_DIR, env=clean_env, creationflags=creationflags)
         else:
             subprocess.Popen(
                 ["uv", "run", "--with", "requests", "--with", "psycopg2-binary", "--with", "cryptography", "AutoResetConn.py"],
-                cwd=APP_DIR, env=env, creationflags=creationflags
+                cwd=APP_DIR, env=clean_env, creationflags=creationflags
             )
     except Exception as e:
         print("❌ Lỗi khi restart_app:", e)
