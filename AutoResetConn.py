@@ -283,9 +283,7 @@ def show_update_loading_window(remote_ver):
         def run_download_task():
             try:
                 download_and_replace(remote_ver, auto_restart=False, silent=True)
-                win.after(0, lambda: lbl_status.config(text="✅ Cập nhật thành công! Đang khởi động lại...", fg="#10b981"))
-                win.after(0, lambda: lbl_title.config(text="🎉 CẬP NHẬT HOÀN TẤT!", fg="#10b981"))
-                win.after(500, lambda: restart_app())
+                restart_app()
             except Exception as ex:
                 win.after(0, lambda: lbl_status.config(text=f"❌ Lỗi: {ex}", fg="#ef4444"))
 
