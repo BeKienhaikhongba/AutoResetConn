@@ -599,6 +599,28 @@ def load_config_cache():
                 CONFIG_CACHE = []
                 for item in raw_list:
                     if isinstance(item, dict):
+                        # TH1: Cấu trúc mới gói gọn toàn bộ thông số trong 1 thẻ "data" mã hóa
+                        if "data" in item and item["data"]:
+                            try:
+                                dec_json_str = fernet.decrypt(item["data"].encode("utf-8")).decode("utf-8")
+                                payload = json.loads(dec_json_str)
+                                c = {
+                                    "name": item.get("name", ""),
+                                    "created": item.get("created", ""),
+                                    "host": payload.get("host", ""),
+                                    "port": payload.get("port", ""),
+                                    "db": payload.get("db", ""),
+                                    "user": payload.get("user", ""),
+                                    "password": payload.get("password", ""),
+                                    "interval_val": payload.get("interval_val", "1"),
+                                    "interval_unit": payload.get("interval_unit", "Giờ")
+                                }
+                                CONFIG_CACHE.append(c)
+                                continue
+                            except Exception:
+                                pass
+                        
+                        # TH2: Cấu trúc cũ (Từng trường mã hóa riêng lẻ hoặc plain text)
                         c = dict(item)
                         c["host"] = decrypt_val(c.get("host", ""))
                         c["port"] = decrypt_val(c.get("port", ""))
@@ -611,7 +633,7 @@ def load_config_cache():
     else:
         CONFIG_CACHE = []
     
-    # Ghi lại bản mã hóa 100% chuẩn trên đĩa & bản tạm trong Temp ngay khi mở ứng dụng
+    # Tự động nén & mã hóa toàn bộ dữ liệu 100% về 1 thẻ "data" gọn gàng
     save_config_cache()
 
 def save_config_cache():
@@ -626,16 +648,22 @@ def save_config_cache():
             user_dec = decrypt_val(c.get("user", ""))
             pass_dec = decrypt_val(c.get("password", ""))
 
+            payload = {
+                "host": host_dec,
+                "port": port_dec,
+                "db": db_dec,
+                "user": user_dec,
+                "password": pass_dec,
+                "interval_val": c.get("interval_val", "1"),
+                "interval_unit": c.get("interval_unit", "Giờ")
+            }
+            # Mã hóa toàn bộ gói thông số vào 1 chuỗi duy nhất
+            enc_data_str = fernet.encrypt(json.dumps(payload, ensure_ascii=False).encode("utf-8")).decode("utf-8")
+
             enc_item = {
                 "name": c.get("name", ""),
-                "host": encrypt_val(host_dec),
-                "port": encrypt_val(port_dec),
-                "db": encrypt_val(db_dec),
-                "user": encrypt_val(user_dec),
-                "password": encrypt_val(pass_dec),
-                "interval_val": c.get("interval_val", "1"),
-                "interval_unit": c.get("interval_unit", "Giờ"),
-                "created": c.get("created", "")
+                "created": c.get("created", ""),
+                "data": enc_data_str
             }
             encrypted_configs_for_file.append(enc_item)
 
@@ -653,7 +681,7 @@ def save_config_cache():
             }
             decrypted_configs_for_temp.append(dec_item)
 
-        # Ghi file db_config.json chính thức: Chỉ giữ "name" dạng chữ, còn lại mã hóa 100%!
+        # Ghi file db_config.json chính thức: Chỉ giữ "name", "created" và 1 thẻ "data" duy nhất!
         full_data = {"configs": encrypted_configs_for_file}
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(full_data, f, indent=2, ensure_ascii=False)
