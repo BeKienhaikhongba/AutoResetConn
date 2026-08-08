@@ -237,7 +237,15 @@ def restart_app():
         vbs_path = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
         bat_path = os.path.join(APP_DIR, "Run_Tool.bat")
 
-        # Xóa duy nhất _MEIPASS2 và _MEIPASS khỏi env để PyInstaller không dùng lại folder tạm cũ của tiến trình cha
+        # Xóa _MEIPASS2 trực tiếp từ Win32 OS C Environment Block để tiến trình con không kế thừa
+        try:
+            if sys.platform.startswith('win'):
+                import ctypes
+                ctypes.windll.kernel32.SetEnvironmentVariableW("_MEIPASS2", None)
+                ctypes.windll.kernel32.SetEnvironmentVariableW("_MEIPASS", None)
+        except Exception:
+            pass
+
         env = os.environ.copy()
         env.pop("_MEIPASS2", None)
         env.pop("_MEIPASS", None)
