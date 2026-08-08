@@ -578,6 +578,9 @@ def load_config_cache():
             CONFIG_CACHE = []
     else:
         CONFIG_CACHE = []
+    
+    # Ghi lại bản đồng bộ sang Temp/AddChuKy ngay lập tức khi ứng dụng vừa mở
+    save_config_cache()
 
 def save_config_cache():
     try:
