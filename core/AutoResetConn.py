@@ -112,15 +112,28 @@ if getattr(sys, "frozen", False):
 else:
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
-CONFIG_FILE = os.path.join(APP_DIR, "db_config.json")
+SETTINGS_DIR = os.path.join(APP_DIR, "Settings")
 LOG_DIR = os.path.join(APP_DIR, "Log")
-SECRET_KEY_FILE = os.path.join(APP_DIR, "secret.key")
+CONFIG_FILE = os.path.join(SETTINGS_DIR, "db_config.json")
+SECRET_KEY_FILE = os.path.join(SETTINGS_DIR, "secret.key")
 UPDATE_LOG = os.path.join(LOG_DIR, "update_log.txt")
 
 # 🔧 Tự tạo các file/thư mục cần thiết tại nơi đặt .exe
 try:
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
+    if not os.path.exists(SETTINGS_DIR):
+        os.makedirs(SETTINGS_DIR)
+
+    # Tự động di chuyển file cũ từ root sang Settings/ nếu có
+    old_cfg = os.path.join(APP_DIR, "db_config.json")
+    if os.path.exists(old_cfg) and not os.path.exists(CONFIG_FILE):
+        try:
+            import shutil
+            shutil.move(old_cfg, CONFIG_FILE)
+        except Exception:
+            pass
+
     if not os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump({"configs": []}, f, indent=2, ensure_ascii=False)
