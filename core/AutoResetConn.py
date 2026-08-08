@@ -115,7 +115,7 @@ else:
 CONFIG_FILE = os.path.join(APP_DIR, "db_config.json")
 LOG_DIR = os.path.join(APP_DIR, "Log")
 SECRET_KEY_FILE = os.path.join(APP_DIR, "secret.key")
-UPDATE_LOG = os.path.join(APP_DIR, "update_log.txt")
+UPDATE_LOG = os.path.join(LOG_DIR, "update_log.txt")
 
 # 🔧 Tự tạo các file/thư mục cần thiết tại nơi đặt .exe
 try:
@@ -134,13 +134,16 @@ except Exception as e:
 
 # ===================== AUTO-UPDATER =====================
 def get_current_version():
-    """Đọc version hiện tại từ file version_local.txt (hoặc mặc định nếu chưa có)."""
-    vf = os.path.join(APP_DIR, "version_local.txt")
-    try:
-        with open(vf, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return "5.0.0"  # lần đầu chạy
+    """Đọc version hiện tại từ file version_local.txt trong Log/ (hoặc root nếu chưa có)."""
+    vf_log = os.path.join(LOG_DIR, "version_local.txt")
+    vf_root = os.path.join(APP_DIR, "version_local.txt")
+    for vf in [vf_log, vf_root]:
+        try:
+            with open(vf, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    return "5.0.0"  # lần đầu chạy
 
 CURRENT_VERSION = get_current_version()
 VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/version.txt"
@@ -202,8 +205,12 @@ def download_and_replace(remote_ver, auto_restart=False):
                     f.write(r.text)
                 log_update(f"✅ Cập nhật thành công file: {rel}", is_ui=False, is_file=True)
 
-        with open(os.path.join(APP_DIR, "version_local.txt"), "w", encoding="utf-8") as f:
-            f.write(remote_ver)
+        for vf in [os.path.join(LOG_DIR, "version_local.txt"), os.path.join(APP_DIR, "version_local.txt")]:
+            try:
+                with open(vf, "w", encoding="utf-8") as f:
+                    f.write(remote_ver)
+            except Exception:
+                pass
         log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}", is_ui=True, is_file=True)
         CURRENT_VERSION = remote_ver
 

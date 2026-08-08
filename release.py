@@ -143,14 +143,19 @@ def main():
         
         dist_dir = os.path.join(APP_DIR, "dist")
         os.makedirs(dist_dir, exist_ok=True)
-        dist_ver_file = os.path.join(dist_dir, "version_local.txt")
-        with open(dist_ver_file, "w", encoding="utf-8") as f:
+
+        # 📁 Đảm bảo tất cả các file log & version tracking được gom gọn vào thư mục dist/Log/
+        dist_log_dir = os.path.join(dist_dir, "Log")
+        os.makedirs(dist_log_dir, exist_ok=True)
+
+        with open(os.path.join(dist_log_dir, "version_local.txt"), "w", encoding="utf-8") as f:
             f.write(next_ver)
-            
+        with open(os.path.join(dist_log_dir, "version.txt"), "w", encoding="utf-8") as f:
+            f.write(next_ver)
+
         py_path = os.path.join(APP_DIR, "AutoResetConn.py")
         dat_path = os.path.join(dist_dir, "AutoResetConn.dat")
         key_path = os.path.join(APP_DIR, "secret.key")
-        dist_key_path = os.path.join(dist_dir, "secret.key")
         
         if os.path.exists(py_path):
             try:
@@ -174,29 +179,27 @@ def main():
             except Exception as ex:
                 print(f"⚠️ Không thể cập nhật AutoResetConn.dat: {ex}")
 
-        # Dọn dẹp tuyệt đối các file nhạy cảm (mã nguồn .py, secret.key) không cho tồn tại dạng text trong dist/
-        dist_py = os.path.join(dist_dir, "AutoResetConn.py")
-        if os.path.exists(dist_py):
-            try: os.remove(dist_py)
-            except Exception: pass
-
-        dist_key = os.path.join(dist_dir, "secret.key")
-        if os.path.exists(dist_key):
-            try: os.remove(dist_key)
-            except Exception: pass
-
-        # Đảm bảo thư mục Log/ nằm gọn gàng trong dist/
-        dist_log_dir = os.path.join(dist_dir, "Log")
-        os.makedirs(dist_log_dir, exist_ok=True)
-        dist_update_log = os.path.join(dist_dir, "update_log.txt")
-        if os.path.exists(dist_update_log):
-            try:
-                import shutil
-                shutil.move(dist_update_log, os.path.join(dist_log_dir, "update_log.txt"))
-            except Exception: pass
+        # 🧹 Dọn dẹp tuyệt đối tất cả các file nhạy cảm & file txt rác khỏi root của dist/
+        unwanted_root_files = [
+            os.path.join(dist_dir, "AutoResetConn.py"),
+            os.path.join(dist_dir, "db_config.json"),
+            os.path.join(dist_dir, "secret.key"),
+            os.path.join(dist_dir, "version.txt"),
+            os.path.join(dist_dir, "version_local.txt"),
+            os.path.join(dist_dir, "update_log.txt")
+        ]
+        import shutil
+        for file_to_del in unwanted_root_files:
+            if os.path.exists(file_to_del):
+                try:
+                    if file_to_del.endswith("update_log.txt"):
+                        shutil.move(file_to_del, os.path.join(dist_log_dir, "update_log.txt"))
+                    else:
+                        os.remove(file_to_del)
+                except Exception:
+                    pass
 
         # Copy 2 file script khởi chạy Run_Tool.bat và Chay_Tool_An_Terminal.vbs vào bộ cài dist/
-        import shutil
         src_bat = os.path.join(APP_DIR, "Run_Tool.bat")
         src_vbs = os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")
         if os.path.exists(src_bat):
@@ -204,7 +207,7 @@ def main():
         if os.path.exists(src_vbs):
             shutil.copy(src_vbs, os.path.join(dist_dir, "Chay_Tool_An_Terminal.vbs"))
 
-        print("✅ Đã dọn dẹp file nhạy cảm & nạp Run_Tool.bat, Chay_Tool_An_Terminal.vbs vào bộ cài dist/")
+        print("✅ Đã dọn dẹp các file rác/nhạy cảm khỏi root dist & tổ chức thư mục dist/Log/ mượt mà!")
     except Exception as e:
         print(f"❌ Lỗi ghi file version: {e}")
         sys.exit(1)
@@ -214,12 +217,12 @@ def main():
 
     # 3. Chạy các lệnh Git Push (Bảo mật: Không bao giờ add db_config.json hay secret.key)
     print("\n📦 Đang tiến hành push bản build mới lên Git...")
-    # Gỡ bỏ an toàn nếu lỡ staged file nhạy cảm
-    subprocess.run(["git", "rm", "--cached", "-f", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json", "dist/AutoResetConn.py"], capture_output=True)
+    # Gỡ bỏ an toàn nếu lỡ staged file nhạy cảm hoặc file rác root
+    subprocess.run(["git", "rm", "--cached", "-f", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json", "dist/AutoResetConn.py", "dist/version.txt", "dist/version_local.txt", "dist/update_log.txt"], capture_output=True)
 
     commands = [
         ["git", "add", ".gitignore", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md", "Run_Tool.bat", "Chay_Tool_An_Terminal.vbs"],
-        ["git", "add", "-f", "dist/AutoResetConn.exe", "dist/AutoResetConn.dat", "dist/version_local.txt", "dist/Run_Tool.bat", "dist/Chay_Tool_An_Terminal.vbs"],
+        ["git", "add", "-f", "dist/AutoResetConn.exe", "dist/AutoResetConn.dat", "dist/Log/", "dist/Run_Tool.bat", "dist/Chay_Tool_An_Terminal.vbs"],
         ["git", "commit", "-m", f"Release v{next_ver}"],
         ["git", "push"]
     ]
