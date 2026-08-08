@@ -689,6 +689,28 @@ def on_select_config(cfg_name):
     show_action_buttons()
     btn_save.config(state="disabled")
 
+    # Gợi ý tự động đồng bộ cấu hình DB được chọn sang tab Signature Cropper (AddChuKy)
+    try:
+        active_cfg = {
+            "host": cfg["host"],
+            "port": cfg["port"],
+            "database": cfg["db"],
+            "user": cfg["user"],
+            "password": decrypt_password(cfg["password"])
+        }
+        with open(os.path.join(APP_DIR, "db_config.json"), "w", encoding="utf-8") as f:
+            json.dump(active_cfg, f, indent=2, ensure_ascii=False)
+            
+        def _sync_http():
+            try:
+                requests.post("http://localhost:3001/api/active-config", json={"config": active_cfg}, timeout=2)
+            except Exception:
+                pass
+        threading.Thread(target=_sync_http, daemon=True).start()
+        log_message(f"💡 Đã gợi ý tự động điền cấu hình [{cfg_name}] sang tab Signature Cropper.")
+    except Exception:
+        pass
+
 def toggle_edit_mode():
     global edit_mode
     if not last_selected_name:
