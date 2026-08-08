@@ -145,18 +145,20 @@ except Exception as e:
     )
     sys.exit(1)
 
+EMBEDDED_VERSION = "2026.8.09.2"
+
 # ===================== AUTO-UPDATER =====================
 def get_current_version():
-    """Đọc version hiện tại từ file version_local.txt trong Log/ (hoặc root nếu chưa có)."""
-    vf_log = os.path.join(LOG_DIR, "version_local.txt")
-    vf_root = os.path.join(APP_DIR, "version_local.txt")
-    for vf in [vf_log, vf_root]:
-        try:
-            with open(vf, "r", encoding="utf-8") as f:
-                return f.read().strip()
-        except Exception:
-            pass
-    return "5.0.0"  # lần đầu chạy
+    """Đọc version hiện tại từ Settings/version.json hoặc nhãn mã nguồn nhúng."""
+    v_file = os.path.join(SETTINGS_DIR, "version.json")
+    try:
+        if os.path.exists(v_file):
+            with open(v_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("version", EMBEDDED_VERSION)
+    except Exception:
+        pass
+    return EMBEDDED_VERSION
 
 CURRENT_VERSION = get_current_version()
 VERSION_URL = "https://raw.githubusercontent.com/BeKienhaikhongba/AutoResetConn/main/version.txt"
@@ -218,12 +220,12 @@ def download_and_replace(remote_ver, auto_restart=False):
                     f.write(r.text)
                 log_update(f"✅ Cập nhật thành công file: {rel}", is_ui=False, is_file=True)
 
-        for vf in [os.path.join(LOG_DIR, "version_local.txt"), os.path.join(APP_DIR, "version_local.txt")]:
-            try:
-                with open(vf, "w", encoding="utf-8") as f:
-                    f.write(remote_ver)
-            except Exception:
-                pass
+        v_file = os.path.join(SETTINGS_DIR, "version.json")
+        try:
+            with open(v_file, "w", encoding="utf-8") as f:
+                json.dump({"version": remote_ver}, f, indent=2)
+        except Exception:
+            pass
         log_update(f"🎉 Hoàn tất cập nhật → phiên bản {remote_ver}", is_ui=True, is_file=True)
         CURRENT_VERSION = remote_ver
 

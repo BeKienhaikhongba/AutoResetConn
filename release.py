@@ -134,24 +134,16 @@ def main():
     next_ver = get_next_version()
     print(f"🔄 Chuẩn bị cập nhật phiên bản mới: {next_ver}")
     
-    # 1. Ghi đè version.txt và version_local.txt
+    # 1. Ghi đè version.txt cho GitHub server check
     try:
         with open(VERSION_FILE, "w", encoding="utf-8") as f:
-            f.write(next_ver)
-        with open(VERSION_LOCAL_FILE, "w", encoding="utf-8") as f:
             f.write(next_ver)
         
         dist_dir = os.path.join(APP_DIR, "dist")
         os.makedirs(dist_dir, exist_ok=True)
 
-        # 📁 Đảm bảo tất cả các file log & version tracking được gom gọn vào thư mục dist/Log/
         dist_log_dir = os.path.join(dist_dir, "Log")
         os.makedirs(dist_log_dir, exist_ok=True)
-
-        with open(os.path.join(dist_log_dir, "version_local.txt"), "w", encoding="utf-8") as f:
-            f.write(next_ver)
-        with open(os.path.join(dist_log_dir, "version.txt"), "w", encoding="utf-8") as f:
-            f.write(next_ver)
 
         py_path = os.path.join(APP_DIR, "AutoResetConn.py")
         dat_path = os.path.join(dist_dir, "AutoResetConn.dat")
@@ -179,14 +171,17 @@ def main():
             except Exception as ex:
                 print(f"⚠️ Không thể cập nhật AutoResetConn.dat: {ex}")
 
-        # 🧹 Dọn dẹp tuyệt đối tất cả các file nhạy cảm & file txt rác khỏi root của dist/
+        # 🧹 Dọn dẹp tuyệt đối tất cả các file nhạy cảm & file txt rác khỏi dist/
         unwanted_root_files = [
+            os.path.join(APP_DIR, "version_local.txt"),
             os.path.join(dist_dir, "AutoResetConn.py"),
             os.path.join(dist_dir, "db_config.json"),
             os.path.join(dist_dir, "secret.key"),
             os.path.join(dist_dir, "version.txt"),
             os.path.join(dist_dir, "version_local.txt"),
-            os.path.join(dist_dir, "update_log.txt")
+            os.path.join(dist_dir, "update_log.txt"),
+            os.path.join(dist_log_dir, "version_local.txt"),
+            os.path.join(dist_log_dir, "version.txt")
         ]
         import shutil
         for file_to_del in unwanted_root_files:
@@ -207,7 +202,7 @@ def main():
         if os.path.exists(src_vbs):
             shutil.copy(src_vbs, os.path.join(dist_dir, "Chay_Tool_An_Terminal.vbs"))
 
-        print("✅ Đã dọn dẹp các file rác/nhạy cảm khỏi root dist & tổ chức thư mục dist/Log/ mượt mà!")
+        print("✅ Đã dọn dẹp các file rác/nhạy cảm & loại bỏ vĩnh viễn version_local.txt!")
     except Exception as e:
         print(f"❌ Lỗi ghi file version: {e}")
         sys.exit(1)
@@ -218,10 +213,10 @@ def main():
     # 3. Chạy các lệnh Git Push (Bảo mật: Không bao giờ add db_config.json hay secret.key)
     print("\n📦 Đang tiến hành push bản build mới lên Git...")
     # Gỡ bỏ an toàn nếu lỡ staged file nhạy cảm hoặc file rác root
-    subprocess.run(["git", "rm", "--cached", "-f", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json", "dist/AutoResetConn.py", "dist/version.txt", "dist/version_local.txt", "dist/update_log.txt"], capture_output=True)
+    subprocess.run(["git", "rm", "--cached", "-f", "version_local.txt", "dist/version_local.txt", "dist/Log/version_local.txt", "db_config.json", "dist/db_config.json", "secret.key", "dist/secret.key", "active_db_config.json", "dist/active_db_config.json", "dist/AutoResetConn.py", "dist/version.txt", "dist/update_log.txt"], capture_output=True)
 
     commands = [
-        ["git", "add", ".gitignore", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md", "Run_Tool.bat", "Chay_Tool_An_Terminal.vbs"],
+        ["git", "add", ".gitignore", "version.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md", "Run_Tool.bat", "Chay_Tool_An_Terminal.vbs"],
         ["git", "add", "-f", "dist/AutoResetConn.exe", "dist/AutoResetConn.dat", "dist/Log/", "dist/Run_Tool.bat", "dist/Chay_Tool_An_Terminal.vbs"],
         ["git", "commit", "-m", f"Release v{next_ver}"],
         ["git", "push"]
