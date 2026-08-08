@@ -648,14 +648,9 @@ def add_new_config():
 
 def on_select_config(cfg_name):
     global selected_label, last_selected_name
-    # Toggle ẩn/hiện khi click lại cùng cấu hình
+    # Toggle ẩn/hiện & trả form về trạng thái tạo mới khi click lại cùng cấu hình
     if last_selected_name == cfg_name:
-        hide_action_buttons()
-        last_selected_name = ""
-        selected_config.set("")
-        if selected_label and selected_label.winfo_exists():
-            selected_label.config(bg="#27272a", fg="#f4f4f5")
-        btn_save.config(state="normal", command=add_new_config)
+        clear_form()
         return
 
     last_selected_name = cfg_name
@@ -665,10 +660,12 @@ def on_select_config(cfg_name):
 
     # highlight
     for w in scroll_frame.winfo_children(): w.config(bg="#27272a", fg="#f4f4f5")
-    selected_label = [w for w in scroll_frame.winfo_children() if w.cget("text") == cfg_name][0]
-    selected_label.config(bg="#4f46e5", fg="#ffffff")
+    matching = [w for w in scroll_frame.winfo_children() if w.cget("text") == cfg_name]
+    if matching:
+        selected_label = matching[0]
+        selected_label.config(bg="#4f46e5", fg="#ffffff")
 
-    # đổ dữ liệu & khóa form
+    # mở khóa tạm để điền dữ liệu
     set_entry_state(False)
     for e in (entry_host, entry_port, entry_db, entry_user, entry_server):
         e.config(fg="#ffffff")
@@ -684,10 +681,12 @@ def on_select_config(cfg_name):
     entry_interval.insert(0, cfg.get("interval_val", "1"))
     combo_unit.set(cfg.get("interval_unit", "Giờ"))
     
+    # Khóa form về ReadOnly & Vô hiệu hóa nút "Lưu cấu hình"
     set_entry_state(True)
+    btn_save.config(state="disabled", text="💾 Lưu cấu hình", command=add_new_config)
 
     show_action_buttons()
-    btn_save.config(state="disabled")
+    btn_edit.config(text="✏️ Sửa", bg="#f59e0b", command=toggle_edit_mode)
 
     # Gợi ý tự động đồng bộ cấu hình DB được chọn sang tab Signature Cropper (AddChuKy)
     try:
@@ -698,8 +697,14 @@ def on_select_config(cfg_name):
             "user": cfg["user"],
             "password": decrypt_password(cfg["password"])
         }
-        with open(os.path.join(APP_DIR, "db_config.json"), "w", encoding="utf-8") as f:
-            json.dump(active_cfg, f, indent=2, ensure_ascii=False)
+        # Ghi file ở cả APP_DIR và tempdir hệ thống để AddChuKy đọc chắc chắn 100%
+        import tempfile
+        for target_dir in [APP_DIR, tempfile.gettempdir()]:
+            try:
+                with open(os.path.join(target_dir, "db_config.json"), "w", encoding="utf-8") as f:
+                    json.dump(active_cfg, f, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
             
         def _sync_http():
             try:

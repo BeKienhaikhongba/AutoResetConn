@@ -17,3 +17,15 @@
 [2026-08-08 17:35:59] ✅ Test connection OK.
 [2026-08-08 17:36:12] ✅ Test connection OK.
 [2026-08-08 17:39:16] 🖋️ Khởi chạy Signature Cropper (bản đóng gói)...
+[2026-08-08 18:01:05] 💡 Đã gợi ý tự động điền cấu hình [bvducgiang_public] sang tab Signature Cropper.
+[2026-08-08 18:01:07] 🖋️ Khởi chạy Signature Cropper (bản đóng gói)...
+[2026-08-08 21:20:43] 🖋️ Khởi chạy Signature Cropper (bản đóng gói)...
+[2026-08-08 21:21:50] ❌ Test connection failed: connection to server at "27.72.192.2", port 6688 failed: FATAL:  password authentication failed for user "postgres"
+
+[2026-08-08 21:22:13] ✅ Test connection OK.
+[2026-08-08 21:22:21] ✅ Test connection OK.
+[2026-08-08 21:22:24] 🟦 Bắt đầu reset cho server [bvducgiang_public]...
+[2026-08-08 21:22:25] ✅ [bvducgiang_public] Reset DB port 6688 thành công.
+[2026-08-08 21:22:25] 🏁 Hoàn tất reset [bvducgiang_public] (Thủ công) - Tổng: 1 | OK: 1 | Lỗi: 0
+
+[2026-08-08 21:22:38] 💡 Đã gợi ý tự động điền cấu hình [bvducgiang_public] sang tab Signature Cropper.
