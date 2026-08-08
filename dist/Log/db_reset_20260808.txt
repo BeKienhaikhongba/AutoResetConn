@@ -16,3 +16,4 @@
 [2026-08-08 17:35:50] ✅ Test connection OK.
 [2026-08-08 17:35:59] ✅ Test connection OK.
 [2026-08-08 17:36:12] ✅ Test connection OK.
+[2026-08-08 17:39:16] 🖋️ Khởi chạy Signature Cropper (bản đóng gói)...

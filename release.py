@@ -49,17 +49,16 @@ Phiên bản phát hành: v{next_ver}
 Môi trường đáp ứng : Windows 10 / 11 (64-bit)
 
 --------------------------------------------------------------------
-1. DANH SÁCH FILE TRONG BỘ BẢN NÉN (RELEASE PACKAGE):
+1. DANH SÁCH FILE TRONG BỘ CẬP NHẬT CORE (CORE RELEASE PACKAGE):
 --------------------------------------------------------------------
 - AutoResetConn.exe         : Chương trình chính (Production Standalone Executable)
 - AutoResetConn.dat         : Core logic mã hóa bảo mật (Fernet encrypted payload)
 - secret.key                : Khóa giải mã lõi chương trình
 - Run_Tool.bat              : Script khởi chạy nhanh có hiển thị/ẩn cửa sổ log
 - Chay_Tool_An_Terminal.vbs : Script khởi chạy ngầm 100% không hiện Terminal
-- db_config.json            : Cấu hình kết nối cơ sở dữ liệu mẫu
-- server.ico                : Biểu tượng ứng dụng
-- README.md                 : Tài liệu hướng dẫn sử dụng chi tiết
-- RELEASE_NOTES.txt         : Thông tin phiên bản & Hướng dẫn cài đặt này
+- RELEASE_NOTES.txt         : Thông tin phiên bản & Hướng dẫn sử dụng này
+
+*(Ghi chú: Các file db_config.json, server.ico, README.md được giữ tại thư mục cài đặt gốc ban đầu để kỹ thuật viên tham khảo khi cần)*
 
 --------------------------------------------------------------------
 2. ĐẶC ĐIỂM NỔI BẬT & BẢO MẬT:
@@ -68,7 +67,7 @@ Môi trường đáp ứng : Windows 10 / 11 (64-bit)
   tuyệt đối không để lộ thông tin kỹ thuật hay câu lệnh nhạy cảm.
 - Cập nhật tự động: Tích hợp cơ chế tự động tải và khởi động lại qua Windows Shell (explorer.exe),
   đảm bảo quá trình nâng cấp không bị lỗi DLL hay xung đột tiến trình.
-- Đóng gói chuẩn: Đầy đủ các file cấu hình, script khởi chạy và tài liệu hướng dẫn.
+- Gọn nhẹ & Độc lập: Bộ Core tinh gọn 100% không bị dư thừa tài liệu hay icon phụ.
 
 --------------------------------------------------------------------
 3. HƯỚNG DẪN SỬ DỤNG:
@@ -100,16 +99,13 @@ def create_offline_packages(next_ver):
     # Tạo file RELEASE_NOTES.txt chi tiết tự động
     notes_path = generate_release_notes(next_ver)
 
-    # Đóng gói đầy đủ tài liệu, cấu hình và bộ chạy (Tuyệt đối không nén mã nguồn .py)
+    # Đóng gói bộ Core Offline gọn gàng (Không bao gồm db_config.json, server.ico, README.md, .py)
     files_to_pack = [
         ("AutoResetConn.exe", os.path.join(dist_dir, "AutoResetConn.exe")),
         ("AutoResetConn.dat", os.path.join(dist_dir, "AutoResetConn.dat")),
         ("secret.key", os.path.join(dist_dir, "secret.key")),
         ("Run_Tool.bat", os.path.join(APP_DIR, "Run_Tool.bat")),
         ("Chay_Tool_An_Terminal.vbs", os.path.join(APP_DIR, "Chay_Tool_An_Terminal.vbs")),
-        ("db_config.json", os.path.join(APP_DIR, "db_config.json")),
-        ("server.ico", os.path.join(APP_DIR, "server.ico")),
-        ("README.md", os.path.join(APP_DIR, "README.md")),
         ("RELEASE_NOTES.txt", notes_path),
     ]
 
