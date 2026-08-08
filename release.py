@@ -62,8 +62,8 @@ def create_offline_packages(next_ver):
     if os.path.exists(os.path.join(dist_dir, "AutoResetConn.exe")):
         files_to_pack.append(os.path.join("dist", "AutoResetConn.exe"))
 
-    zip_filename = f"AutoResetConn_Offline_v{next_ver}.zip"
-    rar_filename = f"AutoResetConn_Offline_v{next_ver}.rar"
+    zip_filename = f"Core_{next_ver}.zip"
+    rar_filename = f"Core_{next_ver}.rar"
     zip_path = os.path.join(dist_dir, zip_filename)
     rar_path = os.path.join(dist_dir, rar_filename)
 
@@ -160,7 +160,8 @@ def main():
     # 3. Chạy các lệnh Git Push
     print("\n📦 Đang tiến hành push bản build mới lên Git...")
     commands = [
-        ["git", "add", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md", "dist/"],
+        ["git", "add", "version.txt", "version_local.txt", "core/AutoResetConn.py", "AutoResetConn.py", "release.py", "README.md"],
+        ["git", "add", "-f", "dist/"],
         ["git", "commit", "-m", f"Release v{next_ver}"],
         ["git", "push"]
     ]
